@@ -63,24 +63,28 @@ function dbSetSetting(key, value) {
   });
 }
 
-// Custom Saved Domains Management in IndexedDB
-async function dbGetCustomDomains() {
-  const data = await dbGetSetting('custom_domains');
+// User-Defined Custom URL Presets Management in IndexedDB
+async function dbGetUrlPresets() {
+  const data = await dbGetSetting('url_presets');
   return Array.isArray(data) ? data : [];
 }
 
-async function dbSaveCustomDomain(domain) {
-  const list = await dbGetCustomDomains();
-  if (!list.includes(domain)) {
-    list.push(domain);
-    await dbSetSetting('custom_domains', list);
-  }
+async function dbSaveUrlPreset(name, url) {
+  const list = await dbGetUrlPresets();
+  const newPreset = {
+    id: 'preset_' + Date.now(),
+    name: name.trim(),
+    url: url.trim()
+  };
+  list.push(newPreset);
+  await dbSetSetting('url_presets', list);
+  return newPreset;
 }
 
-async function dbDeleteCustomDomain(domain) {
-  let list = await dbGetCustomDomains();
-  list = list.filter((d) => d !== domain);
-  await dbSetSetting('custom_domains', list);
+async function dbDeleteUrlPreset(id) {
+  let list = await dbGetUrlPresets();
+  list = list.filter((item) => item.id !== id);
+  await dbSetSetting('url_presets', list);
 }
 
 function dbSaveReport(report) {
@@ -148,36 +152,40 @@ function dbClearAllReports() {
   });
 }
 
-// --- 2. Custom Domain UI Management ---
-function appendCustomDomainPill(domain) {
-  const container = document.getElementById('domain-pills-container');
-  const existing = Array.from(container.querySelectorAll('input')).find((i) => i.value === domain);
-  if (existing) {
-    existing.checked = true;
-    return;
-  }
+// --- 2. Custom Preset UI Rendering ---
+function renderPresetPill(preset) {
+  const container = document.getElementById('preset-pills-container');
+  const emptyHint = document.getElementById('empty-presets-hint');
+  if (emptyHint) emptyHint.style.display = 'none';
 
   const label = document.createElement('label');
-  label.className = 'pill-checkbox removable';
+  label.className = 'pill-checkbox preset-pill';
+  label.id = `pill_${preset.id}`;
 
   const input = document.createElement('input');
   input.type = 'checkbox';
-  input.value = domain;
-  input.checked = true;
+  input.value = preset.url;
+  input.checked = true; // เปิดใช้งานทันทีหลังสร้าง
 
   const span = document.createElement('span');
-  span.textContent = domain + ' ';
+  span.textContent = `🔖 ${preset.name} `;
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
   removeBtn.className = 'pill-remove-btn';
   removeBtn.textContent = '✕';
-  removeBtn.title = 'ลบตัวเลือกนี้ออกจากระบบ';
+  removeBtn.title = `ลบปุ่ม ${preset.name}`;
   removeBtn.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    await dbDeleteCustomDomain(domain);
-    label.remove();
+    if (confirm(`ต้องการลบปุ่มลัด "${preset.name}" หรือไม่?`)) {
+      await dbDeleteUrlPreset(preset.id);
+      label.remove();
+      const remaining = container.querySelectorAll('.preset-pill');
+      if (remaining.length === 0 && emptyHint) {
+        emptyHint.style.display = 'inline-block';
+      }
+    }
   });
 
   span.appendChild(removeBtn);
@@ -186,14 +194,22 @@ function appendCustomDomainPill(domain) {
   container.appendChild(label);
 }
 
-async function loadSavedCustomDomains() {
-  const domains = await dbGetCustomDomains();
-  domains.forEach((d) => {
-    appendCustomDomainPill(d);
-  });
+async function loadSavedPresets() {
+  const container = document.getElementById('preset-pills-container');
+  const emptyHint = document.getElementById('empty-presets-hint');
+  const presets = await dbGetUrlPresets();
+
+  if (presets.length > 0) {
+    if (emptyHint) emptyHint.style.display = 'none';
+    presets.forEach((p) => {
+      renderPresetPill(p);
+    });
+  } else {
+    if (emptyHint) emptyHint.style.display = 'inline-block';
+  }
 }
 
-// --- 3. Gemini API Integration (2-Step Dynamic Search) ---
+// --- 3. Gemini API Integration (2-Step Dynamic Search & Procurement Table) ---
 
 // Step 1: ดึงขนาดความแรงและรูปแบบยาจากฐานข้อมูลราคา/DMSIC
 async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
@@ -214,8 +230,8 @@ async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
 }
 \`\`\`
 ข้อกำหนด:
-- ส่งเฉพาะรายการความแรงและรูปแบบที่เป็นมาตรฐานจริง
-- กระชับ ชัดเจน เป็นภาษาไทยหรืออังกฤษมาตรฐาน
+- ส่งเฉพาะรายการความแรงและรูปแบบที่มีการจัดซื้อจริงในไทย
+- กระชับ ชัดเจน
 `;
 
   const requestBody = {
@@ -253,7 +269,7 @@ async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
   return parsed && Array.isArray(parsed.strengths) ? parsed.strengths : [];
 }
 
-// Step 2: วิเคราะห์นวัตกรรมและคำนวณราคาตามขนาดความแรงที่เจาะจง
+// Step 2: วิเคราะห์นวัตกรรมและดึงตารางราคาอ้างอิงแยกตามบริษัทผู้ยื่นราคา
 async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -268,8 +284,8 @@ async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, 
 ${strengthInstruction}
 โดยเน้นตรวจสอบข้อมูลที่ปรากฏหรือเกี่ยวข้องกับเว็บไซต์/โดเมนต่อไปนี้: [${targetDomainString}]
 
-นอกจากนี้ ให้ประเมินข้อมูลราคาอ้างอิง ค่าใช้จ่าย หรือราคากลาง โดยเน้นอ้างอิงจากฐานข้อมูลราคาภาครัฐไทย เช่น DMSIC (https://dmsic.moph.go.th/index/drugsearch/1), บัญชียาหลักแห่งชาติ, สปสช. หรือกรมบัญชีกลาง สำหรับขนาดความแรงที่ระบุนี้โดยเฉพาะ
-(หากไม่สามารถเข้าถึง URL ได้ ให้ใช้ราคากลางอ้างอิงล่าสุดของประเทศไทยที่บันทึกไว้ในระบบ DMSIC/กรมบัญชีกลางมาแสดง พร้อมระบุที่มา)
+นอกจากนี้ กรุณาจำลองและประเมินข้อมูล "ราคาอ้างอิงจัดซื้อปกติ (ยา)" จากฐานข้อมูล DMSIC กระทรวงสาธารณสุข สำหรับยานี้ในขนาดความแรง "${strength || 'มาตรฐาน'}"
+โดยแจกแจงเป็นตารางรายชื่อบริษัทผู้ผลิต/ผู้จำหน่ายที่ยื่นเสนอราคาในโรงพยาบาลรัฐ เช่น SUN PHARMACEUTICAL, เอ็ม แอนด์ เอ็ช, แอล.บี.เอส. หรือบริษัทอื่นๆ ที่มีจำหน่ายจริง
 
 ให้ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ:
 \`\`\`json
@@ -293,9 +309,35 @@ ${strengthInstruction}
   "pricing": {
     "hasPriceInfo": true,
     "strength": "${strength || 'ภาพรวม'}",
-    "estimatedPrice": "เช่น ~120 - 180 บาท / vial (ราคากลางภาครัฐ)",
-    "priceSource": "DMSIC กระทรวงสาธารณสุข / ราคากลางยา สปสช.",
-    "notes": "รายละเอียดการเบิกจ่ายตามสิทธิ สปสช./กรมบัญชีกลาง หรือข้อกำหนดการจัดซื้อ"
+    "estimatedPrice": "~86.67 - 96.30 บาท / vial",
+    "priceSource": "DMSIC กระทรวงสาธารณสุข (ราคาอ้างอิงจัดซื้อปกติ)",
+    "notes": "ข้อมูลราคาอ้างอิงตามฐานข้อมูลประวัติการจัดซื้อภาครัฐในประเทศไทย",
+    "priceTable": [
+      {
+        "packSize": "1",
+        "company": "SUN PHARMACEUTICAL INDUSTRIES, INDIA",
+        "minPrice": "87.74",
+        "modePrice": "90.95"
+      },
+      {
+        "packSize": "1",
+        "company": "เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง",
+        "minPrice": "86.67",
+        "modePrice": "86.67"
+      },
+      {
+        "packSize": "1",
+        "company": "แอล.บี.เอส. แลบบอเรตอรี่",
+        "minPrice": "90.00",
+        "modePrice": "90.00"
+      },
+      {
+        "packSize": "10",
+        "company": "แอล.บี.เอส. แลบบอเรตอรี่",
+        "minPrice": "1100.00",
+        "modePrice": "1100.00"
+      }
+    ]
   }
 }
 \`\`\`
@@ -415,12 +457,30 @@ function renderResult(data) {
     });
   }
 
-  // แสดงผล Card ราคาเสมอ
+  // เรนเดอร์กล่องราคาและตารางรายชื่อบริษัท
   const pData = data.pricing || {};
   document.getElementById('result-price-strength').textContent = `ขนาด/รูปแบบ: ${escapeHtml(pData.strength || data.selectedStrength || 'ภาพรวม')}`;
   document.getElementById('result-price-val').textContent = pData.estimatedPrice || 'ประมาณการตามราคากลางภาครัฐ';
   document.getElementById('result-price-src').textContent = pData.priceSource ? `ที่มา: ${pData.priceSource}` : 'DMSIC / ราคากลางยาภาครัฐ';
   document.getElementById('result-price-notes').textContent = pData.notes || 'อ้างอิงจากฐานข้อมูลราคากลางการจัดซื้อยา';
+
+  const tbody = document.getElementById('result-price-tbody');
+  tbody.innerHTML = '';
+
+  if (Array.isArray(pData.priceTable) && pData.priceTable.length > 0) {
+    pData.priceTable.forEach((row) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(String(row.packSize || '-'))}</td>
+        <td class="company-col">${escapeHtml(String(row.company || '-'))}</td>
+        <td class="num-col">${escapeHtml(String(row.minPrice || '-'))}</td>
+        <td class="num-col">${escapeHtml(String(row.modePrice || '-'))}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } else {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">ไม่พบรายการแยกบริษัท หรือเป็นยาผูกขาดรายเดียว</td></tr>`;
+  }
 
   document.getElementById('result-container').style.display = 'flex';
   document.getElementById('result-container').scrollIntoView({ behavior: 'smooth' });
@@ -500,7 +560,7 @@ function escapeHtml(str) {
 // --- 5. Event Listeners & Startup ---
 document.addEventListener('DOMContentLoaded', async () => {
   await openDatabase();
-  await loadSavedCustomDomains();
+  await loadSavedPresets();
   initNavigation();
 
   // Register Service Worker
@@ -533,28 +593,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert('บันทึก API Key ลงใน IndexedDB เรียบร้อยแล้ว');
   });
 
-  // Save Custom Domain as Persistent Pill Option
-  document.getElementById('btn-save-domain').addEventListener('click', async () => {
-    const input = document.getElementById('custom-domain-input');
-    let raw = input.value.trim();
-    if (!raw) {
+  // บันทึกปุ่มด่วนพร้อมตั้งชื่อปุ่มเอง (Save Custom URL Preset)
+  document.getElementById('btn-save-preset').addEventListener('click', async () => {
+    const nameInput = document.getElementById('preset-name-input');
+    const urlInput = document.getElementById('preset-url-input');
+    const name = nameInput.value.trim();
+    const url = urlInput.value.trim();
+
+    if (!name) {
+      alert('กรุณาตั้งชื่อปุ่มกด เช่น อย. ทะเบียน, DMSIC ราคากลาง');
+      nameInput.focus();
+      return;
+    }
+    if (!url) {
       alert('กรุณาระบุ URL หรือโดเมนที่ต้องการบันทึก');
+      urlInput.focus();
       return;
     }
 
-    let domain = raw;
     try {
-      if (domain.startsWith('http://') || domain.startsWith('https://')) {
-        const urlObj = new URL(domain);
-        domain = urlObj.hostname;
-      }
+      const newPreset = await dbSaveUrlPreset(name, url);
+      renderPresetPill(newPreset);
+      nameInput.value = '';
+      urlInput.value = '';
+      alert(`บันทึกปุ่มด่วน "${name}" เรียบร้อยแล้ว`);
     } catch (e) {
-      // ใช้ค่าตามที่กรอกหากไม่เข้าข่ายรูปแบบ URL มาตรฐาน
+      alert('เกิดข้อผิดพลาดในการบันทึกปุ่ม: ' + e.message);
     }
-
-    await dbSaveCustomDomain(domain);
-    appendCustomDomainPill(domain);
-    input.value = '';
   });
 
   // Clear Search Input
@@ -636,15 +701,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // รวบรวมโดเมนมาตรฐาน + โดเมนจากปุ่มด่วนที่ผู้ใช้ติ๊กเลือก
     const selectedDomains = [];
-    document.querySelectorAll('.domain-pills input:checked').forEach((cb) => {
+    document.querySelectorAll('#domain-pills-container input:checked').forEach((cb) => {
       selectedDomains.push(cb.value);
     });
-
-    const customDomainInputVal = document.getElementById('custom-domain-input').value.trim();
-    if (customDomainInputVal && !selectedDomains.includes(customDomainInputVal)) {
-      selectedDomains.push(customDomainInputVal);
-    }
+    document.querySelectorAll('#preset-pills-container input:checked').forEach((cb) => {
+      selectedDomains.push(cb.value);
+    });
 
     if (selectedDomains.length === 0) {
       alert('กรุณาเลือกหรือระบุโดเมนเป้าหมายอย่างน้อย 1 แห่ง');

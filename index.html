@@ -50,8 +50,8 @@
             </select>
           </div>
 
-          <!-- โดเมนเป้าหมาย -->
-          <label class="form-label">โดเมนเป้าหมายที่ต้องการให้ AI ค้นหา</label>
+          <!-- โดเมนเป้าหมายเริ่มต้น -->
+          <label class="form-label">โดเมนเป้าหมายมาตรฐาน</label>
           <div class="domain-pills" id="domain-pills-container">
             <label class="pill-checkbox">
               <input type="checkbox" value="fda.gov" checked>
@@ -71,12 +71,20 @@
             </label>
           </div>
 
-          <div class="custom-domain-box">
-            <div class="input-with-action">
-              <input type="text" id="custom-domain-input" placeholder="ใส่ URL หรือโดเมน เช่น who.int หรือ https://drugbank.com">
-              <button type="button" id="btn-save-domain" class="action-btn-sm">+ บันทึกเป็นตัวเลือก</button>
+          <!-- ปุ่มด่วนที่ผู้ใช้บันทึกเอง -->
+          <label class="form-label">ปุ่มลัด URL / แหล่งข้อมูลที่บันทึกไว้</label>
+          <div class="domain-pills preset-pills-area" id="preset-pills-container">
+            <span class="empty-hint" id="empty-presets-hint">ยังไม่มีปุ่มลัดที่บันทึกไว้</span>
+          </div>
+
+          <!-- กล่องบันทึก URL พร้อมตั้งชื่อปุ่มกดเอง -->
+          <div class="custom-preset-card">
+            <div class="preset-form-grid">
+              <input type="text" id="preset-name-input" placeholder="ตั้งชื่อปุ่ม เช่น อย. ทะเบียน, DMSIC ราคากลาง">
+              <input type="text" id="preset-url-input" placeholder="ระบุ URL เช่น https://pertento.fda.moph.go.th">
             </div>
-            <p class="settings-hint">โดเมนที่บันทึกจะถูกเก็บลงใน IndexedDB เพื่อเป็นตัวเลือกใช้งานถาวร</p>
+            <button type="button" id="btn-save-preset" class="action-btn-wide mt-2">+ บันทึกเป็นปุ่มด่วน</button>
+            <p class="settings-hint">ปุ่มที่บันทึกจะถูกเก็บลงใน IndexedDB ถาวร สามารถคลิกเปิด-ปิดเพื่อใช้ค้นหาได้ทันที</p>
           </div>
 
           <!-- แหล่งอ้างอิงราคา -->
@@ -128,14 +136,35 @@
             <div id="result-sources" class="sources-list"></div>
           </div>
 
-          <!-- กล่องแสดงราคาอ้างอิง -->
+          <!-- กล่องแสดงราคาอ้างอิงและตารางแยกตามบริษัท -->
           <div id="result-pricing-card" class="card result-card">
-            <h3 class="card-heading">💵 ข้อมูลราคาอ้างอิงและประมาณการค่าใช้จ่าย (Reference Price)</h3>
+            <h3 class="card-heading">💵 ข้อมูลราคาอ้างอิงจัดซื้อปกติ (แยกตามบริษัทผู้ยื่นราคา)</h3>
             <div class="pricing-strength-badge" id="result-price-strength">-</div>
+            
             <div class="pricing-summary-box mt-2">
               <div class="pricing-main-value" id="result-price-val">-</div>
               <div class="pricing-source-badge" id="result-price-src">-</div>
             </div>
+
+            <!-- ตารางราคาอ้างอิงตามบริษัทผู้ยื่นราคา -->
+            <div class="table-container mt-2">
+              <table class="price-data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 15%;">ขนาดบรรจุ</th>
+                    <th style="width: 45%;">บริษัท</th>
+                    <th style="width: 20%; text-align: right;">ต่ำสุด</th>
+                    <th style="width: 20%; text-align: right;">ฐานนิยม</th>
+                  </tr>
+                </thead>
+                <tbody id="result-price-tbody">
+                  <tr>
+                    <td colspan="4" style="text-align: center; color: var(--text-muted);">กำลังโหลดข้อมูลตารางราคา...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
             <p id="result-price-notes" class="card-text mt-2">-</p>
           </div>
         </div>

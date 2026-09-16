@@ -205,12 +205,26 @@ select:focus {
   font-size: 1rem;
 }
 
-/* Domain Pills */
+/* Domain Pills & Presets */
 .domain-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.preset-pills-area {
+  min-height: 38px;
+  padding: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-color);
+}
+
+.empty-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 6px 8px;
 }
 
 .pill-checkbox input {
@@ -237,11 +251,20 @@ select:focus {
   font-weight: 600;
 }
 
-.pill-checkbox.removable span {
+.pill-checkbox.preset-pill span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding-right: 8px;
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #cbd5e1;
+}
+
+.pill-checkbox.preset-pill input:checked + span {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .pill-remove-btn {
@@ -256,41 +279,49 @@ select:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s;
-}
-
-.pill-remove-btn:hover {
-  color: var(--danger);
-  background: rgba(239, 68, 68, 0.2);
-}
-
-.custom-domain-box {
-  margin-bottom: 16px;
-}
-
-.input-with-action {
-  display: flex;
-  gap: 8px;
-}
-
-.input-with-action input {
-  flex: 1;
-}
-
-.action-btn-sm {
-  padding: 0 14px;
-  background: var(--bg-card-hover);
-  border: 1px solid var(--primary);
-  color: var(--primary);
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
   transition: all 0.2s;
 }
 
-.action-btn-sm:hover {
+.pill-remove-btn:hover {
+  color: #fff;
+  background: var(--danger);
+}
+
+/* Custom Preset Creator */
+.custom-preset-card {
+  background: #0f172a;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.preset-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+@media (min-width: 480px) {
+  .preset-form-grid {
+    grid-template-columns: 1fr 1.4fr;
+  }
+}
+
+.action-btn-wide {
+  width: 100%;
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn-wide:hover {
   background: var(--primary);
   color: #fff;
 }
@@ -485,7 +516,7 @@ select:focus {
   margin-bottom: 2px;
 }
 
-/* Pricing Result Styling */
+/* Pricing Result & Procurement Table */
 .pricing-strength-badge {
   display: inline-block;
   font-size: 0.8rem;
@@ -517,6 +548,55 @@ select:focus {
 .pricing-source-badge {
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #0f172a;
+  margin-top: 10px;
+}
+
+.price-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.price-data-table th,
+.price-data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.price-data-table th {
+  background: #1e293b;
+  color: var(--primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.price-data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.price-data-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.price-data-table .company-col {
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.price-data-table .num-col {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #38bdf8;
 }
 
 /* History */
