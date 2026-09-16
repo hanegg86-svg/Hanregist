@@ -253,7 +253,7 @@ async function copyAndOpenDmsic() {
   window.open(targetUrl, '_blank');
 }
 
-// --- 4. Gemini API Integration (2-Step Dynamic Search & Procurement Table) ---
+// --- 4. Gemini API Integration (2-Step Dynamic Search & Full Procurement Table) ---
 
 // Step 1: ดึงขนาดความแรงและรูปแบบยาจากฐานข้อมูลราคา/DMSIC
 async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
@@ -313,7 +313,7 @@ async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
   return parsed && Array.isArray(parsed.strengths) ? parsed.strengths : [];
 }
 
-// Step 2: วิเคราะห์นวัตกรรมและดึงตารางราคาอ้างอิงแยกตามบริษัทผู้ยื่นราคา
+// Step 2: วิเคราะห์นวัตกรรมและดึงตารางราคาอ้างอิงแยกตามบริษัทผู้ยื่นราคา (ครบทั้ง 6 คอลัมน์และทุกบริษัท)
 async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -329,7 +329,15 @@ ${strengthInstruction}
 โดยเน้นตรวจสอบข้อมูลที่ปรากฏหรือเกี่ยวข้องกับเว็บไซต์/โดเมนต่อไปนี้: [${targetDomainString}]
 
 นอกจากนี้ กรุณาจำลองและประเมินข้อมูล "ราคาอ้างอิงจัดซื้อปกติ (ยา)" จากฐานข้อมูล DMSIC กระทรวงสาธารณสุข สำหรับยานี้ในขนาดความแรง "${strength || 'มาตรฐาน'}"
-โดยแจกแจงเป็นตารางรายชื่อบริษัทผู้ผลิต/ผู้จำหน่ายที่ยื่นเสนอราคาในโรงพยาบาลรัฐ เช่น SUN PHARMACEUTICAL, เอ็ม แอนด์ เอ็ช, แอล.บี.เอส. หรือบริษัทอื่นๆ ที่มีจำหน่ายจริง
+ข้อกำหนดสำคัญมากสำหรับตารางราคา:
+1. ให้แจกแจงรายชื่อบริษัทผู้ผลิต/ผู้จำหน่ายที่ยื่นเสนอราคาในโรงพยาบาลรัฐ "ให้ครบถ้วนทุกบริษัทที่มีข้อมูลประวัติการจัดซื้อ" (เช่น องค์การเภสัชกรรม (GPO), SUN PHARMACEUTICAL, เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง, แอล.บี.เอส. แลบบอเรตอรี่, สยามเภสัช หรือบริษัทอื่นทั้งหมด ห้ามตัดทอนหรือตอบมาแค่ตัวอย่าง)
+2. ตารางต้องมีครบทั้ง 6 คอลัมน์ตามหน้าเว็บ DMSIC ได้แก่:
+   - packSize: ขนาดบรรจุ (เช่น "1", "10")
+   - company: ชื่อบริษัท
+   - minPrice: ราคาต่ำสุด (ตัวเลข เช่น "86.67")
+   - modePrice: ราคาฐานนิยม (ตัวเลข เช่น "86.67")
+   - medianPrice: ราคามัธยฐาน (ตัวเลข เช่น "95.23")
+   - avgPrice: ราคาเฉลี่ย (ตัวเลข เช่น "93.4466")
 
 ให้ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ:
 \`\`\`json
@@ -353,33 +361,57 @@ ${strengthInstruction}
   "pricing": {
     "hasPriceInfo": true,
     "strength": "${strength || 'ภาพรวม'}",
-    "estimatedPrice": "~86.67 - 96.30 บาท / vial",
+    "estimatedPrice": "~86.67 - 98.00 บาท / vial",
     "priceSource": "DMSIC กระทรวงสาธารณสุข (ราคาอ้างอิงจัดซื้อปกติ)",
-    "notes": "ข้อมูลราคาอ้างอิงตามฐานข้อมูลประวัติการจัดซื้อภาครัฐในประเทศไทย",
+    "notes": "ข้อมูลราคาอ้างอิงตามประวัติการจัดซื้อภาครัฐในประเทศไทย แยกตามบริษัทผู้ยื่นเสนอราคา",
     "priceTable": [
       {
         "packSize": "1",
         "company": "SUN PHARMACEUTICAL INDUSTRIES, INDIA",
         "minPrice": "87.74",
-        "modePrice": "90.95"
+        "modePrice": "90.95",
+        "medianPrice": "90.95",
+        "avgPrice": "90.8481"
       },
       {
         "packSize": "1",
         "company": "เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง",
         "minPrice": "86.67",
-        "modePrice": "86.67"
+        "modePrice": "86.67",
+        "medianPrice": "95.23",
+        "avgPrice": "93.4466"
       },
       {
         "packSize": "1",
         "company": "แอล.บี.เอส. แลบบอเรตอรี่",
         "minPrice": "90.00",
-        "modePrice": "90.00"
+        "modePrice": "90.00",
+        "medianPrice": "90.00",
+        "avgPrice": "90.0000"
       },
       {
         "packSize": "10",
         "company": "แอล.บี.เอส. แลบบอเรตอรี่",
         "minPrice": "1100.00",
-        "modePrice": "1100.00"
+        "modePrice": "1100.00",
+        "medianPrice": "1100.00",
+        "avgPrice": "1100.0000"
+      },
+      {
+        "packSize": "1",
+        "company": "เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง",
+        "minPrice": "96.30",
+        "modePrice": "96.30",
+        "medianPrice": "96.30",
+        "avgPrice": "96.3000"
+      },
+      {
+        "packSize": "1",
+        "company": "องค์การเภสัชกรรม",
+        "minPrice": "98.00",
+        "modePrice": "98.00",
+        "medianPrice": "98.00",
+        "avgPrice": "98.0000"
       }
     ]
   }
@@ -501,7 +533,7 @@ function renderResult(data) {
     });
   }
 
-  // เรนเดอร์กล่องราคาและตารางรายชื่อบริษัท
+  // เรนเดอร์กล่องราคาและตารางรายชื่อบริษัท (6 คอลัมน์)
   const pData = data.pricing || {};
   document.getElementById('result-price-strength').textContent = `ขนาด/รูปแบบ: ${escapeHtml(pData.strength || data.selectedStrength || 'ภาพรวม')}`;
   document.getElementById('result-price-val').textContent = pData.estimatedPrice || 'ประมาณการตามราคากลางภาครัฐ';
@@ -519,11 +551,13 @@ function renderResult(data) {
         <td class="company-col">${escapeHtml(String(row.company || '-'))}</td>
         <td class="num-col">${escapeHtml(String(row.minPrice || '-'))}</td>
         <td class="num-col">${escapeHtml(String(row.modePrice || '-'))}</td>
+        <td class="num-col">${escapeHtml(String(row.medianPrice || '-'))}</td>
+        <td class="num-col">${escapeHtml(String(row.avgPrice || '-'))}</td>
       `;
       tbody.appendChild(tr);
     });
   } else {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">ไม่พบรายการแยกบริษัท หรือเป็นยาผูกขาดรายเดียว</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 14px;">ไม่พบรายการแยกบริษัท หรือเป็นยาผูกขาดรายเดียว</td></tr>`;
   }
 
   document.getElementById('result-container').style.display = 'flex';

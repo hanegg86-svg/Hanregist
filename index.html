@@ -143,7 +143,7 @@
             <div id="result-sources" class="sources-list"></div>
           </div>
 
-          <!-- กล่องแสดงราคาอ้างอิงและตารางแยกตามบริษัท -->
+          <!-- กล่องแสดงราคาอ้างอิงและตารางแยกตามบริษัทแบบ 6 คอลัมน์ -->
           <div id="result-pricing-card" class="card result-card">
             <div class="pricing-card-header">
               <h3 class="card-heading">💵 ข้อมูลราคาอ้างอิงจัดซื้อปกติ (แยกตามบริษัทผู้ยื่นราคา)</h3>
@@ -158,20 +158,25 @@
               <div class="pricing-source-badge" id="result-price-src">-</div>
             </div>
 
-            <!-- ตารางราคาอ้างอิงตามบริษัทผู้ยื่นราคา -->
+            <!-- แจ้งเตือนการเลื่อนตารางบนมือถือ -->
+            <div class="table-scroll-hint">⟷ แตะและเลื่อนซ้าย-ขวา เพื่อดูตารางให้ครบทั้ง 6 คอลัมน์</div>
+
+            <!-- ตารางราคาอ้างอิง 6 คอลัมน์ตาม DMSIC -->
             <div class="table-container mt-2">
               <table class="price-data-table">
                 <thead>
                   <tr>
-                    <th style="width: 15%;">ขนาดบรรจุ</th>
-                    <th style="width: 45%;">บริษัท</th>
-                    <th style="width: 20%; text-align: right;">ต่ำสุด</th>
-                    <th style="width: 20%; text-align: right;">ฐานนิยม</th>
+                    <th style="min-width: 60px;">ขนาดบรรจุ</th>
+                    <th style="min-width: 180px;">บริษัท</th>
+                    <th style="min-width: 80px; text-align: right;">ต่ำสุด</th>
+                    <th style="min-width: 80px; text-align: right;">ฐานนิยม</th>
+                    <th style="min-width: 80px; text-align: right;">มัธยฐาน</th>
+                    <th style="min-width: 80px; text-align: right;">เฉลี่ย</th>
                   </tr>
                 </thead>
                 <tbody id="result-price-tbody">
                   <tr>
-                    <td colspan="4" style="text-align: center; color: var(--text-muted);">กำลังโหลดข้อมูลตารางราคา...</td>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 14px;">กำลังโหลดข้อมูลตารางราคา...</td>
                   </tr>
                 </tbody>
               </table>
