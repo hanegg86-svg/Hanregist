@@ -89,8 +89,15 @@
 
           <!-- แหล่งอ้างอิงราคา -->
           <label for="price-url-input" class="form-label">ตรวจสอบราคาอ้างอิง (Price Reference URL / แหล่งข้อมูลราคา)</label>
-          <div class="input-wrapper mb-3">
+          <div class="input-wrapper">
             <input type="text" id="price-url-input" value="https://dmsic.moph.go.th/index/drugsearch/1" placeholder="ระบุ URL หรือแหล่งราคา เช่น goodrx.com, DMSIC">
+          </div>
+
+          <!-- ปุ่มคัดลอกชื่อยาและเปิดเว็บ DMSIC ทันที -->
+          <div class="mt-2 mb-3">
+            <button type="button" id="btn-open-dmsic" class="accent-outline-btn flex-btn">
+              📋 คัดลอกชื่อยา & เปิดหน้าค้นหาเว็บ DMSIC
+            </button>
           </div>
 
           <button id="btn-analyze" class="primary-btn">
@@ -138,7 +145,12 @@
 
           <!-- กล่องแสดงราคาอ้างอิงและตารางแยกตามบริษัท -->
           <div id="result-pricing-card" class="card result-card">
-            <h3 class="card-heading">💵 ข้อมูลราคาอ้างอิงจัดซื้อปกติ (แยกตามบริษัทผู้ยื่นราคา)</h3>
+            <div class="pricing-card-header">
+              <h3 class="card-heading">💵 ข้อมูลราคาอ้างอิงจัดซื้อปกติ (แยกตามบริษัทผู้ยื่นราคา)</h3>
+              <button type="button" id="btn-open-dmsic-result" class="accent-outline-btn btn-sm">
+                📋 คัดลอกชื่อ & เปิด DMSIC
+              </button>
+            </div>
             <div class="pricing-strength-badge" id="result-price-strength">-</div>
             
             <div class="pricing-summary-box mt-2">

@@ -209,7 +209,51 @@ async function loadSavedPresets() {
   }
 }
 
-// --- 3. Gemini API Integration (2-Step Dynamic Search & Procurement Table) ---
+// --- 3. Clipboard Copy & Open DMSIC Link Utility ---
+async function copyAndOpenDmsic() {
+  const drugInput = document.getElementById('drug-name-input');
+  const drugName = (drugInput.value || (currentReport && currentReport.drugName) || '').trim();
+  const targetUrl = (document.getElementById('price-url-input').value || 'https://dmsic.moph.go.th/index/drugsearch/1').trim();
+
+  if (!drugName) {
+    alert('กรุณากรอกชื่อยาในช่องค้นหาก่อน');
+    drugInput.focus();
+    return;
+  }
+
+  let copied = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(drugName);
+      copied = true;
+    } catch (e) {
+      console.warn('Clipboard writeText failed:', e);
+    }
+  }
+
+  if (!copied) {
+    try {
+      const tempInput = document.createElement('input');
+      tempInput.value = drugName;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+      copied = true;
+    } catch (e) {
+      console.warn('Fallback copy failed:', e);
+    }
+  }
+
+  const msg = copied
+    ? `คัดลอกชื่อยา "${drugName}" ลงคลิปบอร์ดแล้ว!\nระบบกำลังเปิดเว็บ DMSIC ให้คุณแตะที่ช่องค้นหาแล้วกด "วาง (Paste)" เพื่อสืบค้นได้ทันที`
+    : `กำลังเปิดเว็บ DMSIC สำหรับค้นหา "${drugName}"`;
+
+  alert(msg);
+  window.open(targetUrl, '_blank');
+}
+
+// --- 4. Gemini API Integration (2-Step Dynamic Search & Procurement Table) ---
 
 // Step 1: ดึงขนาดความแรงและรูปแบบยาจากฐานข้อมูลราคา/DMSIC
 async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
@@ -390,7 +434,7 @@ ${strengthInstruction}
   return parsedData;
 }
 
-// --- 4. UI Controller & View Switching ---
+// --- 5. UI Controller & View Switching ---
 function initNavigation() {
   const navItems = document.querySelectorAll('.nav-item');
   const views = document.querySelectorAll('.tab-view');
@@ -557,7 +601,7 @@ function escapeHtml(str) {
   );
 }
 
-// --- 5. Event Listeners & Startup ---
+// --- 6. Event Listeners & Startup ---
 document.addEventListener('DOMContentLoaded', async () => {
   await openDatabase();
   await loadSavedPresets();
@@ -592,6 +636,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await dbSetSetting('gemini_api_key', key);
     alert('บันทึก API Key ลงใน IndexedDB เรียบร้อยแล้ว');
   });
+
+  // Event listener สำหรับปุ่มคัดลอกชื่อยา & เปิดเว็บ DMSIC (ทั้ง 2 จุด)
+  document.getElementById('btn-open-dmsic').addEventListener('click', copyAndOpenDmsic);
+  document.getElementById('btn-open-dmsic-result').addEventListener('click', copyAndOpenDmsic);
 
   // บันทึกปุ่มด่วนพร้อมตั้งชื่อปุ่มเอง (Save Custom URL Preset)
   document.getElementById('btn-save-preset').addEventListener('click', async () => {
