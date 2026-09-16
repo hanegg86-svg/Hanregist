@@ -253,7 +253,7 @@ async function copyAndOpenDmsic() {
   window.open(targetUrl, '_blank');
 }
 
-// --- 4. Gemini API Integration (2-Step Dynamic Search & Full Procurement Table) ---
+// --- 4. Gemini API Integration (2-Step Dynamic Search, 6-Col Table & Citations) ---
 
 // Step 1: ดึงขนาดความแรงและรูปแบบยาจากฐานข้อมูลราคา/DMSIC
 async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
@@ -313,7 +313,7 @@ async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
   return parsed && Array.isArray(parsed.strengths) ? parsed.strengths : [];
 }
 
-// Step 2: วิเคราะห์นวัตกรรมและดึงตารางราคาอ้างอิงแยกตามบริษัทผู้ยื่นราคา (ครบทั้ง 6 คอลัมน์และทุกบริษัท)
+// Step 2: วิเคราะห์นวัตกรรมและดึงตารางราคาอ้างอิงแยกตามบริษัทผู้ยื่นราคา (พร้อมเอกสารอ้างอิงและรอบปีข้อมูล)
 async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -329,8 +329,8 @@ ${strengthInstruction}
 โดยเน้นตรวจสอบข้อมูลที่ปรากฏหรือเกี่ยวข้องกับเว็บไซต์/โดเมนต่อไปนี้: [${targetDomainString}]
 
 นอกจากนี้ กรุณาจำลองและประเมินข้อมูล "ราคาอ้างอิงจัดซื้อปกติ (ยา)" จากฐานข้อมูล DMSIC กระทรวงสาธารณสุข สำหรับยานี้ในขนาดความแรง "${strength || 'มาตรฐาน'}"
-ข้อกำหนดสำคัญมากสำหรับตารางราคา:
-1. ให้แจกแจงรายชื่อบริษัทผู้ผลิต/ผู้จำหน่ายที่ยื่นเสนอราคาในโรงพยาบาลรัฐ "ให้ครบถ้วนทุกบริษัทที่มีข้อมูลประวัติการจัดซื้อ" (เช่น องค์การเภสัชกรรม (GPO), SUN PHARMACEUTICAL, เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง, แอล.บี.เอส. แลบบอเรตอรี่, สยามเภสัช หรือบริษัทอื่นทั้งหมด ห้ามตัดทอนหรือตอบมาแค่ตัวอย่าง)
+ข้อกำหนดสำคัญมากสำหรับข้อมูลราคาและแหล่งอ้างอิง:
+1. ให้แจกแจงรายชื่อบริษัทผู้ผลิต/ผู้จำหน่ายที่ยื่นเสนอราคาในโรงพยาบาลรัฐ "ให้ครบถ้วนทุกบริษัทที่มีข้อมูลประวัติการจัดซื้อ" (เช่น องค์การเภสัชกรรม (GPO), SUN PHARMACEUTICAL, เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง, แอล.บี.เอส. แลบบอเรตอรี่, สยามเภสัช หรือบริษัทอื่นทั้งหมด ห้ามตัดทอนหรือส่งเฉพาะตัวอย่าง)
 2. ตารางต้องมีครบทั้ง 6 คอลัมน์ตามหน้าเว็บ DMSIC ได้แก่:
    - packSize: ขนาดบรรจุ (เช่น "1", "10")
    - company: ชื่อบริษัท
@@ -338,6 +338,10 @@ ${strengthInstruction}
    - modePrice: ราคาฐานนิยม (ตัวเลข เช่น "86.67")
    - medianPrice: ราคามัธยฐาน (ตัวเลข เช่น "95.23")
    - avgPrice: ราคาเฉลี่ย (ตัวเลข เช่น "93.4466")
+3. ระบุที่มาและเอกสารอ้างอิงอย่างโปร่งใส:
+   - referenceDocument: ระบุชื่อประกาศทางการ เอกสาร หรือระบบฐานข้อมูลที่ใช้เทียบเคียง (เช่น "ฐานข้อมูลราคาอ้างอิงจัดซื้อปกติ (ยา) ศูนย์ข้อมูลข่าวสารด้านเวชภัณฑ์ กระทรวงสาธารณสุข (DMSIC) เทียบเคียงประกาศคณะกรรมการพัฒนาระบบยาแห่งชาติ")
+   - dataPeriod: ระบุรอบปีหรือช่วงเวลาของชุดข้อมูล (เช่น "ข้อมูลประวัติการจัดซื้อปีงบประมาณ 2564–2566 / ประกาศราคากลางฉบับล่าสุด")
+   - sourceConfidence: ระบุสถานะความเชื่อมั่น (เช่น "ตรงตามประวัติการจัดซื้อภาครัฐในระบบ DMSIC" หรือ "ประมาณการเทียบเคียงราคากลางยาภาครัฐ")
 
 ให้ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ:
 \`\`\`json
@@ -363,6 +367,9 @@ ${strengthInstruction}
     "strength": "${strength || 'ภาพรวม'}",
     "estimatedPrice": "~86.67 - 98.00 บาท / vial",
     "priceSource": "DMSIC กระทรวงสาธารณสุข (ราคาอ้างอิงจัดซื้อปกติ)",
+    "referenceDocument": "ฐานข้อมูลราคาอ้างอิงจัดซื้อปกติ ศูนย์ข้อมูลข่าวสารด้านเวชภัณฑ์ กระทรวงสาธารณสุข (DMSIC) ร่วมกับประกาศคณะกรรมการพัฒนาระบบยาแห่งชาติ",
+    "dataPeriod": "ประวัติการจัดซื้อภาครัฐปีงบประมาณ 2564 - 2566",
+    "sourceConfidence": "ข้อมูลตรงตามประวัติการจัดซื้อในระบบ DMSIC",
     "notes": "ข้อมูลราคาอ้างอิงตามประวัติการจัดซื้อภาครัฐในประเทศไทย แยกตามบริษัทผู้ยื่นเสนอราคา",
     "priceTable": [
       {
@@ -539,6 +546,15 @@ function renderResult(data) {
   document.getElementById('result-price-val').textContent = pData.estimatedPrice || 'ประมาณการตามราคากลางภาครัฐ';
   document.getElementById('result-price-src').textContent = pData.priceSource ? `ที่มา: ${pData.priceSource}` : 'DMSIC / ราคากลางยาภาครัฐ';
   document.getElementById('result-price-notes').textContent = pData.notes || 'อ้างอิงจากฐานข้อมูลราคากลางการจัดซื้อยา';
+
+  // แสดงรายละเอียดแหล่งอ้างอิงและรอบข้อมูล (Citations)
+  const docText = pData.referenceDocument || 'ฐานข้อมูลราคาอ้างอิงจัดซื้อปกติ ศูนย์ข้อมูลข่าวสารด้านเวชภัณฑ์ กระทรวงสาธารณสุข (DMSIC)';
+  const periodText = pData.dataPeriod || 'รอบข้อมูลปีงบประมาณภาครัฐ';
+  const confidenceText = pData.sourceConfidence || 'เทียบเคียงฐานข้อมูลประวัติการจัดซื้อภาครัฐ';
+
+  document.getElementById('result-citation-doc').textContent = docText;
+  document.getElementById('result-citation-period').textContent = periodText;
+  document.getElementById('result-citation-confidence').textContent = confidenceText;
 
   const tbody = document.getElementById('result-price-tbody');
   tbody.innerHTML = '';
