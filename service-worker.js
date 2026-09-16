@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pharmanova-cache-v8';
+const CACHE_NAME = 'pharmanova-cache-v9';
 const STATIC_ASSETS = [
   './',
   './index.html',

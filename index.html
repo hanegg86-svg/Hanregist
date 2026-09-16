@@ -29,16 +29,19 @@
       <section id="view-search" class="tab-view active">
         <div class="search-card">
           <!-- Step 1: ชื่อยา & ปุ่มดึงความแรง -->
-          <label for="drug-name-input" class="form-label">1. ชื่อยาหรือสารสำคัญ (Generic / Trade Name)</label>
+          <label for="drug-name-input" class="form-label">1. ชื่อยาหรือสารสำคัญ (Generic / Active Ingredient)</label>
           <div class="input-wrapper">
-            <input type="text" id="drug-name-input" placeholder="เช่น Semaglutide, Meropenem..." autocomplete="off">
+            <input type="text" id="drug-name-input" placeholder="เช่น Sevelamer, Meropenem, Semaglutide..." autocomplete="off">
             <button id="btn-clear-search" class="clear-btn" style="display: none;">✕</button>
           </div>
 
-          <div class="mt-2">
+          <div class="button-grid-pair mt-2">
             <button type="button" id="btn-fetch-strengths" class="secondary-btn flex-btn">
-              <span class="btn-text">🔍 ดึงขนาดความแรงจากฐานข้อมูลราคา (Step 1)</span>
+              <span class="btn-text">🔍 ดึงขนาดความแรง (Step 1)</span>
               <div class="btn-spinner" style="display: none;"></div>
+            </button>
+            <button type="button" id="btn-open-fda" class="accent-outline-btn flex-btn">
+              📋 คัดลอก & เปิดเว็บ อย.
             </button>
           </div>
 
@@ -101,7 +104,7 @@
           </div>
 
           <button id="btn-analyze" class="primary-btn">
-            <span class="btn-text">ตรวจสอบนวัตกรรมและราคาอ้างอิง (Step 2)</span>
+            <span class="btn-text">ตรวจสอบนวัตกรรม ทะเบียน อย. และราคา (Step 2)</span>
             <div class="btn-spinner" style="display: none;"></div>
           </button>
         </div>
@@ -141,6 +144,43 @@
           <div class="card result-card">
             <h3 class="card-heading">🌐 ข้อมูลที่ตรวจพบจากโดเมนเป้าหมาย</h3>
             <div id="result-sources" class="sources-list"></div>
+          </div>
+
+          <!-- กล่องแสดงรายการทะเบียนตำรับยา อย. ประเทศไทย -->
+          <div id="result-fda-card" class="card result-card">
+            <div class="pricing-card-header">
+              <h3 class="card-heading">🏛️ ทะเบียนตำรับยา อย. ประเทศไทย (สืบค้นจากสารสำคัญ)</h3>
+              <button type="button" id="btn-open-fda-result" class="accent-outline-btn btn-sm">
+                📋 คัดลอกชื่อ & เปิดเว็บ อย.
+              </button>
+            </div>
+            <div class="fda-meta-bar mt-2">
+              <span id="result-fda-ingredient" class="pricing-strength-badge">สารสำคัญ: -</span>
+              <span id="result-fda-count" class="badge-subtle">0 รายการ</span>
+            </div>
+
+            <!-- แจ้งเตือนการเลื่อนตารางบนมือถือ -->
+            <div class="table-scroll-hint">⟷ แตะและเลื่อนซ้าย-ขวา เพื่อดูรายละเอียดทะเบียนตำรับยา</div>
+
+            <!-- ตารางทะเบียนตำรับยา อย. 5 คอลัมน์ -->
+            <div class="table-container mt-2">
+              <table class="price-data-table fda-data-table">
+                <thead>
+                  <tr>
+                    <th style="min-width: 50px; text-align: center;">ลำดับ</th>
+                    <th style="min-width: 120px;">เลขทะเบียน</th>
+                    <th style="min-width: 110px;">ชื่อทางการค้าไทย</th>
+                    <th style="min-width: 160px;">ชื่อทางการค้าอังกฤษ</th>
+                    <th style="min-width: 180px;">ชื่อผู้รับอนุญาต</th>
+                  </tr>
+                </thead>
+                <tbody id="result-fda-tbody">
+                  <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 14px;">กำลังโหลดข้อมูลทะเบียนตำรับยา อย...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <!-- กล่องแสดงราคาอ้างอิงและตารางแยกตามบริษัทแบบ 6 คอลัมน์ -->

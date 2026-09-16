@@ -209,7 +209,30 @@ async function loadSavedPresets() {
   }
 }
 
-// --- 3. Clipboard Copy & Open DMSIC Link Utility ---
+// --- 3. Clipboard Copy & Open External Portals (DMSIC / FDA) ---
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      console.warn('Clipboard writeText failed:', e);
+    }
+  }
+  try {
+    const tempInput = document.createElement('input');
+    tempInput.value = text;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    document.execCommand('copy');
+    document.body.removeChild(tempInput);
+    return true;
+  } catch (e) {
+    console.warn('Fallback copy failed:', e);
+    return false;
+  }
+}
+
 async function copyAndOpenDmsic() {
   const drugInput = document.getElementById('drug-name-input');
   const drugName = (drugInput.value || (currentReport && currentReport.drugName) || '').trim();
@@ -221,39 +244,36 @@ async function copyAndOpenDmsic() {
     return;
   }
 
-  let copied = false;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    try {
-      await navigator.clipboard.writeText(drugName);
-      copied = true;
-    } catch (e) {
-      console.warn('Clipboard writeText failed:', e);
-    }
-  }
-
-  if (!copied) {
-    try {
-      const tempInput = document.createElement('input');
-      tempInput.value = drugName;
-      document.body.appendChild(tempInput);
-      tempInput.select();
-      document.execCommand('copy');
-      document.body.removeChild(tempInput);
-      copied = true;
-    } catch (e) {
-      console.warn('Fallback copy failed:', e);
-    }
-  }
-
+  const copied = await copyTextToClipboard(drugName);
   const msg = copied
-    ? `คัดลอกชื่อยา "${drugName}" ลงคลิปบอร์ดแล้ว!\nระบบกำลังเปิดเว็บ DMSIC ให้คุณแตะที่ช่องค้นหาแล้วกด "วาง (Paste)" เพื่อสืบค้นได้ทันที`
+    ? `คัดลอกชื่อยา "${drugName}" แล้ว!\nระบบกำลังเปิดเว็บ DMSIC ให้คุณแตะช่องค้นหาแล้วกด "วาง (Paste)" ได้ทันที`
     : `กำลังเปิดเว็บ DMSIC สำหรับค้นหา "${drugName}"`;
 
   alert(msg);
   window.open(targetUrl, '_blank');
 }
 
-// --- 4. Gemini API Integration (2-Step Dynamic Search, 6-Col Table & Citations) ---
+async function copyAndOpenFda() {
+  const drugInput = document.getElementById('drug-name-input');
+  const drugName = (drugInput.value || (currentReport && currentReport.drugName) || '').trim();
+  const targetUrl = 'https://pertento.fda.moph.go.th/FDA_SEARCH_DRUG/SEARCH_DRUG/FRM_SEARCH_DRUG.aspx';
+
+  if (!drugName) {
+    alert('กรุณากรอกชื่อยาหรือสารสำคัญในช่องค้นหาก่อน');
+    drugInput.focus();
+    return;
+  }
+
+  const copied = await copyTextToClipboard(drugName);
+  const msg = copied
+    ? `คัดลอกชื่อสารสำคัญ "${drugName}" แล้ว!\nระบบกำลังเปิดหน้าค้นหา อย. ให้คุณแตะช่อง "ชื่อสารสำคัญ" แล้วกด "วาง (Paste)" เพื่อค้นหาทะเบียนตำรับยาได้ทันที`
+    : `กำลังเปิดหน้าค้นหา อย. สำหรับสารสำคัญ "${drugName}"`;
+
+  alert(msg);
+  window.open(targetUrl, '_blank');
+}
+
+// --- 4. Gemini API Integration (Innovation + FDA Registrations + Procurement Price Table) ---
 
 // Step 1: ดึงขนาดความแรงและรูปแบบยาจากฐานข้อมูลราคา/DMSIC
 async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
@@ -313,7 +333,7 @@ async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
   return parsed && Array.isArray(parsed.strengths) ? parsed.strengths : [];
 }
 
-// Step 2: วิเคราะห์นวัตกรรมและดึงตารางราคาอ้างอิงแยกตามบริษัทผู้ยื่นราคา (พร้อมเอกสารอ้างอิงและรอบปีข้อมูล)
+// Step 2: วิเคราะห์นวัตกรรม + ทะเบียนตำรับยา อย. ไทย + ตารางราคาอ้างอิง DMSIC
 async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -323,25 +343,26 @@ async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, 
     : `ขนาดความแรง: ประเมินภาพรวมทุกขนาดความแรง`;
 
   const promptText = `
-คุณเป็นผู้เชี่ยวชาญด้านเภสัชวิทยา เศรษฐศาสตร์สาธารณสุข และนวัตกรรมยาระดับสากล
-กรุณาวิเคราะห์นวัตกรรมของยาชื่อ: "${drugName}"
+คุณเป็นผู้เชี่ยวชาญด้านเภสัชวิทยา การขึ้นทะเบียนยา สำนักงานคณะกรรมการอาหารและยา (อย.) และระบบจัดซื้อยาภาครัฐไทย
+กรุณาวิเคราะห์นวัตกรรมของยา/สารสำคัญ: "${drugName}"
 ${strengthInstruction}
 โดยเน้นตรวจสอบข้อมูลที่ปรากฏหรือเกี่ยวข้องกับเว็บไซต์/โดเมนต่อไปนี้: [${targetDomainString}]
 
-นอกจากนี้ กรุณาจำลองและประเมินข้อมูล "ราคาอ้างอิงจัดซื้อปกติ (ยา)" จากฐานข้อมูล DMSIC กระทรวงสาธารณสุข สำหรับยานี้ในขนาดความแรง "${strength || 'มาตรฐาน'}"
-ข้อกำหนดสำคัญมากสำหรับข้อมูลราคาและแหล่งอ้างอิง:
-1. ให้แจกแจงรายชื่อบริษัทผู้ผลิต/ผู้จำหน่ายที่ยื่นเสนอราคาในโรงพยาบาลรัฐ "ให้ครบถ้วนทุกบริษัทที่มีข้อมูลประวัติการจัดซื้อ" (เช่น องค์การเภสัชกรรม (GPO), SUN PHARMACEUTICAL, เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง, แอล.บี.เอส. แลบบอเรตอรี่, สยามเภสัช หรือบริษัทอื่นทั้งหมด ห้ามตัดทอนหรือส่งเฉพาะตัวอย่าง)
-2. ตารางต้องมีครบทั้ง 6 คอลัมน์ตามหน้าเว็บ DMSIC ได้แก่:
-   - packSize: ขนาดบรรจุ (เช่น "1", "10")
-   - company: ชื่อบริษัท
-   - minPrice: ราคาต่ำสุด (ตัวเลข เช่น "86.67")
-   - modePrice: ราคาฐานนิยม (ตัวเลข เช่น "86.67")
-   - medianPrice: ราคามัธยฐาน (ตัวเลข เช่น "95.23")
-   - avgPrice: ราคาเฉลี่ย (ตัวเลข เช่น "93.4466")
-3. ระบุที่มาและเอกสารอ้างอิงอย่างโปร่งใส:
-   - referenceDocument: ระบุชื่อประกาศทางการ เอกสาร หรือระบบฐานข้อมูลที่ใช้เทียบเคียง (เช่น "ฐานข้อมูลราคาอ้างอิงจัดซื้อปกติ (ยา) ศูนย์ข้อมูลข่าวสารด้านเวชภัณฑ์ กระทรวงสาธารณสุข (DMSIC) เทียบเคียงประกาศคณะกรรมการพัฒนาระบบยาแห่งชาติ")
-   - dataPeriod: ระบุรอบปีหรือช่วงเวลาของชุดข้อมูล (เช่น "ข้อมูลประวัติการจัดซื้อปีงบประมาณ 2564–2566 / ประกาศราคากลางฉบับล่าสุด")
-   - sourceConfidence: ระบุสถานะความเชื่อมั่น (เช่น "ตรงตามประวัติการจัดซื้อภาครัฐในระบบ DMSIC" หรือ "ประมาณการเทียบเคียงราคากลางยาภาครัฐ")
+นอกจากนี้ กรุณาดำเนินการประเมิน 2 ส่วนสำคัญของประเทศไทย:
+
+1. ข้อมูล "ระบบค้นหาข้อมูลผลิตภัณฑ์ยา สำนักงานคณะกรรมการอาหารและยา (อย. pertento.fda.moph.go.th)"
+เมื่อค้นหาด้วยชื่อสารสำคัญ: "${drugName}"
+กรุณาจำลองรายการทะเบียนตำรับยาที่ได้รับอนุมัติในประเทศไทย ทั้งหมดที่มีข้อมูล (เช่น ยาต้นแบบ ยาสามัญ และรูปแบบต่างๆ)
+โดยให้โครงสร้างตารางมี 5 คอลัมน์ตามหน้าเว็บ อย.:
+- no: ลำดับที่ (ตัวเลข)
+- regNo: เลขทะเบียนตำรับยา (เช่น "1C 103/54 (N)", "1C 15079/67 (NG)")
+- tradeNameTh: ชื่อทางการค้าภาษาไทย (ถ้าไม่มีให้ระบุ "-")
+- tradeNameEn: ชื่อทางการค้าภาษาอังกฤษ (เช่น "RENVELA TABLETS", "SEVELA F.C. TABLET 800 MG")
+- licensee: ชื่อผู้รับอนุญาต (เช่น "บริษัท ซาโนฟี่-อเวนตีส (ประเทศไทย) จำกัด", "บริษัท สยามเภสัช จำกัด")
+
+2. ข้อมูล "ราคาอ้างอิงจัดซื้อปกติ (ยา) จากฐานข้อมูล DMSIC กระทรวงสาธารณสุข"
+สำหรับยานี้ในขนาดความแรง "${strength || 'มาตรฐาน'}" แจกแจงรายชื่อบริษัทผู้ยื่นเสนอราคาทุกรายที่มีประวัติจัดซื้อในโรงพยาบาลรัฐ โดยมีครบ 6 คอลัมน์ (packSize, company, minPrice, modePrice, medianPrice, avgPrice)
+พร้อมระบุ referenceDocument, dataPeriod, และ sourceConfidence
 
 ให้ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ:
 \`\`\`json
@@ -362,10 +383,26 @@ ${strengthInstruction}
       "findings": "ข้อค้นพบสำคัญจากหรือเกี่ยวกับโดเมนนี้"
     }
   ],
+  "fdaRegistrations": [
+    {
+      "no": 1,
+      "regNo": "1C 103/54 (N)",
+      "tradeNameTh": "-",
+      "tradeNameEn": "RENVELA(R) TABLETS",
+      "licensee": "บริษัท ซาโนฟี่-อเวนตีส (ประเทศไทย) จำกัด"
+    },
+    {
+      "no": 2,
+      "regNo": "1C 15079/67 (NG)",
+      "tradeNameTh": "-",
+      "tradeNameEn": "SEVELA F.C. TABLET 800 MG",
+      "licensee": "บริษัท สยามเภสัช จำกัด"
+    }
+  ],
   "pricing": {
     "hasPriceInfo": true,
     "strength": "${strength || 'ภาพรวม'}",
-    "estimatedPrice": "~86.67 - 98.00 บาท / vial",
+    "estimatedPrice": "ประมาณการราคาอ้างอิง",
     "priceSource": "DMSIC กระทรวงสาธารณสุข (ราคาอ้างอิงจัดซื้อปกติ)",
     "referenceDocument": "ฐานข้อมูลราคาอ้างอิงจัดซื้อปกติ ศูนย์ข้อมูลข่าวสารด้านเวชภัณฑ์ กระทรวงสาธารณสุข (DMSIC) ร่วมกับประกาศคณะกรรมการพัฒนาระบบยาแห่งชาติ",
     "dataPeriod": "ประวัติการจัดซื้อภาครัฐปีงบประมาณ 2564 - 2566",
@@ -379,46 +416,6 @@ ${strengthInstruction}
         "modePrice": "90.95",
         "medianPrice": "90.95",
         "avgPrice": "90.8481"
-      },
-      {
-        "packSize": "1",
-        "company": "เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง",
-        "minPrice": "86.67",
-        "modePrice": "86.67",
-        "medianPrice": "95.23",
-        "avgPrice": "93.4466"
-      },
-      {
-        "packSize": "1",
-        "company": "แอล.บี.เอส. แลบบอเรตอรี่",
-        "minPrice": "90.00",
-        "modePrice": "90.00",
-        "medianPrice": "90.00",
-        "avgPrice": "90.0000"
-      },
-      {
-        "packSize": "10",
-        "company": "แอล.บี.เอส. แลบบอเรตอรี่",
-        "minPrice": "1100.00",
-        "modePrice": "1100.00",
-        "medianPrice": "1100.00",
-        "avgPrice": "1100.0000"
-      },
-      {
-        "packSize": "1",
-        "company": "เอ็ม แอนด์ เอ็ช แมนูแฟคเจอริ่ง",
-        "minPrice": "96.30",
-        "modePrice": "96.30",
-        "medianPrice": "96.30",
-        "avgPrice": "96.3000"
-      },
-      {
-        "packSize": "1",
-        "company": "องค์การเภสัชกรรม",
-        "minPrice": "98.00",
-        "modePrice": "98.00",
-        "medianPrice": "98.00",
-        "avgPrice": "98.0000"
       }
     ]
   }
@@ -540,7 +537,31 @@ function renderResult(data) {
     });
   }
 
-  // เรนเดอร์กล่องราคาและตารางรายชื่อบริษัท (6 คอลัมน์)
+  // เรนเดอร์ตารางทะเบียนตำรับยา อย. ประเทศไทย
+  const fdaList = Array.isArray(data.fdaRegistrations) ? data.fdaRegistrations : [];
+  document.getElementById('result-fda-ingredient').textContent = `สารสำคัญ: ${escapeHtml(data.drugName)}`;
+  document.getElementById('result-fda-count').textContent = `ค้นพบ ${fdaList.length} รายการ`;
+
+  const fdaTbody = document.getElementById('result-fda-tbody');
+  fdaTbody.innerHTML = '';
+
+  if (fdaList.length > 0) {
+    fdaList.forEach((row, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="text-align: center;">${escapeHtml(String(row.no || idx + 1))}</td>
+        <td class="reg-col">${escapeHtml(String(row.regNo || '-'))}</td>
+        <td>${escapeHtml(String(row.tradeNameTh || '-'))}</td>
+        <td class="company-col">${escapeHtml(String(row.tradeNameEn || '-'))}</td>
+        <td>${escapeHtml(String(row.licensee || '-'))}</td>
+      `;
+      fdaTbody.appendChild(tr);
+    });
+  } else {
+    fdaTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 14px;">ไม่พบรายการขึ้นทะเบียนตำรับยาในประเทศไทยสำหรับสารสำคัญนี้</td></tr>`;
+  }
+
+  // เรนเดอร์กล่องราคาและตารางรายชื่อบริษัท DMSIC (6 คอลัมน์)
   const pData = data.pricing || {};
   document.getElementById('result-price-strength').textContent = `ขนาด/รูปแบบ: ${escapeHtml(pData.strength || data.selectedStrength || 'ภาพรวม')}`;
   document.getElementById('result-price-val').textContent = pData.estimatedPrice || 'ประมาณการตามราคากลางภาครัฐ';
@@ -556,8 +577,8 @@ function renderResult(data) {
   document.getElementById('result-citation-period').textContent = periodText;
   document.getElementById('result-citation-confidence').textContent = confidenceText;
 
-  const tbody = document.getElementById('result-price-tbody');
-  tbody.innerHTML = '';
+  const priceTbody = document.getElementById('result-price-tbody');
+  priceTbody.innerHTML = '';
 
   if (Array.isArray(pData.priceTable) && pData.priceTable.length > 0) {
     pData.priceTable.forEach((row) => {
@@ -570,10 +591,10 @@ function renderResult(data) {
         <td class="num-col">${escapeHtml(String(row.medianPrice || '-'))}</td>
         <td class="num-col">${escapeHtml(String(row.avgPrice || '-'))}</td>
       `;
-      tbody.appendChild(tr);
+      priceTbody.appendChild(tr);
     });
   } else {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 14px;">ไม่พบรายการแยกบริษัท หรือเป็นยาผูกขาดรายเดียว</td></tr>`;
+    priceTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 14px;">ไม่พบรายการแยกบริษัท หรือเป็นยาผูกขาดรายเดียว</td></tr>`;
   }
 
   document.getElementById('result-container').style.display = 'flex';
@@ -687,9 +708,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert('บันทึก API Key ลงใน IndexedDB เรียบร้อยแล้ว');
   });
 
-  // Event listener สำหรับปุ่มคัดลอกชื่อยา & เปิดเว็บ DMSIC (ทั้ง 2 จุด)
+  // Event listener สำหรับปุ่มคัดลอกชื่อยา & เปิดเว็บ DMSIC
   document.getElementById('btn-open-dmsic').addEventListener('click', copyAndOpenDmsic);
   document.getElementById('btn-open-dmsic-result').addEventListener('click', copyAndOpenDmsic);
+
+  // Event listener สำหรับปุ่มคัดลอกชื่อสารสำคัญ & เปิดเว็บ อย.
+  document.getElementById('btn-open-fda').addEventListener('click', copyAndOpenFda);
+  document.getElementById('btn-open-fda-result').addEventListener('click', copyAndOpenFda);
 
   // บันทึกปุ่มด่วนพร้อมตั้งชื่อปุ่มเอง (Save Custom URL Preset)
   document.getElementById('btn-save-preset').addEventListener('click', async () => {
@@ -779,7 +804,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert(`ดึงขนาดความแรงไม่สำเร็จ: ${error.message}`);
     } finally {
       btn.disabled = false;
-      btnText.textContent = '🔍 ดึงขนาดความแรงจากฐานข้อมูลราคา (Step 1)';
+      btnText.textContent = '🔍 ดึงขนาดความแรง (Step 1)';
       btnSpinner.style.display = 'none';
     }
   });
@@ -821,7 +846,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnSpinner = btn.querySelector('.btn-spinner');
 
     btn.disabled = true;
-    btnText.textContent = 'AI กำลังค้นหาและวิเคราะห์...';
+    btnText.textContent = 'AI กำลังสืบค้นข้อมูล อย. และราคา...';
     btnSpinner.style.display = 'block';
 
     try {
@@ -831,7 +856,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert(`การวิเคราะห์ล้มเหลว: ${error.message}`);
     } finally {
       btn.disabled = false;
-      btnText.textContent = 'ตรวจสอบนวัตกรรมและราคาอ้างอิง (Step 2)';
+      btnText.textContent = 'ตรวจสอบนวัตกรรม ทะเบียน อย. และราคา (Step 2)';
       btnSpinner.style.display = 'none';
     }
   });
