@@ -35,7 +35,7 @@
           </div>
 
           <label class="form-label">โดเมนเป้าหมายที่ต้องการให้ AI ค้นหา</label>
-          <div class="domain-pills">
+          <div class="domain-pills" id="domain-pills-container">
             <label class="pill-checkbox">
               <input type="checkbox" value="fda.gov" checked>
               <span>FDA.gov</span>
@@ -55,7 +55,16 @@
           </div>
 
           <div class="custom-domain-box">
-            <input type="text" id="custom-domain-input" placeholder="ระบุโดเมนเพิ่มเติม เช่น who.int">
+            <div class="input-with-action">
+              <input type="text" id="custom-domain-input" placeholder="ใส่ URL หรือโดเมน เช่น who.int หรือ https://drugbank.com">
+              <button type="button" id="btn-save-domain" class="action-btn-sm">+ บันทึกเป็นตัวเลือก</button>
+            </div>
+            <p class="settings-hint">โดเมนที่บันทึกจะถูกเก็บลงใน IndexedDB เพื่อเป็นตัวเลือกใช้งานถาวร</p>
+          </div>
+
+          <label for="price-url-input" class="form-label">ตรวจสอบราคาอ้างอิง (Price Reference URL / แหล่งข้อมูลราคา)</label>
+          <div class="input-wrapper mb-3">
+            <input type="text" id="price-url-input" placeholder="ระบุ URL หรือแหล่งราคา เช่น goodrx.com, ราคากลางยา (เว้นว่างได้)">
           </div>
 
           <button id="btn-analyze" class="primary-btn">
@@ -99,6 +108,15 @@
           <div class="card result-card">
             <h3 class="card-heading">🌐 ข้อมูลที่ตรวจพบจากโดเมนเป้าหมาย</h3>
             <div id="result-sources" class="sources-list"></div>
+          </div>
+
+          <div id="result-pricing-card" class="card result-card" style="display: none;">
+            <h3 class="card-heading">💵 ข้อมูลราคาอ้างอิงและประมาณการค่าใช้จ่าย (Reference Price)</h3>
+            <div class="pricing-summary-box">
+              <div class="pricing-main-value" id="result-price-val">-</div>
+              <div class="pricing-source-badge" id="result-price-src">-</div>
+            </div>
+            <p id="result-price-notes" class="card-text mt-2">-</p>
           </div>
         </div>
       </section>

@@ -210,8 +210,71 @@ input[type="text"]:focus, input[type="password"]:focus {
   font-weight: 600;
 }
 
+.pill-checkbox.removable span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+}
+
+.pill-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.pill-remove-btn:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.2);
+}
+
 .custom-domain-box {
   margin-bottom: 16px;
+}
+
+.input-with-action {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-action input {
+  flex: 1;
+}
+
+.action-btn-sm {
+  padding: 0 14px;
+  background: var(--bg-card-hover);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.action-btn-sm:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* Utilities */
+.mb-3 {
+  margin-bottom: 16px;
+}
+
+.mt-2 {
+  margin-top: 8px;
 }
 
 /* Buttons */
@@ -386,6 +449,31 @@ input[type="text"]:focus, input[type="password"]:focus {
   font-weight: 700;
   color: var(--accent);
   margin-bottom: 2px;
+}
+
+/* Pricing Result Styling */
+.pricing-summary-box {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: #0f172a;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+  margin-bottom: 8px;
+}
+
+.pricing-main-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.pricing-source-badge {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 /* History */
