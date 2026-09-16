@@ -63,6 +63,26 @@ function dbSetSetting(key, value) {
   });
 }
 
+// Custom Saved Domains Management in IndexedDB
+async function dbGetCustomDomains() {
+  const data = await dbGetSetting('custom_domains');
+  return Array.isArray(data) ? data : [];
+}
+
+async function dbSaveCustomDomain(domain) {
+  const list = await dbGetCustomDomains();
+  if (!list.includes(domain)) {
+    list.push(domain);
+    await dbSetSetting('custom_domains', list);
+  }
+}
+
+async function dbDeleteCustomDomain(domain) {
+  let list = await dbGetCustomDomains();
+  list = list.filter((d) => d !== domain);
+  await dbSetSetting('custom_domains', list);
+}
+
 function dbSaveReport(report) {
   return new Promise((resolve, reject) => {
     if (!dbInstance) return reject(new Error('Database not ready'));
@@ -128,20 +148,134 @@ function dbClearAllReports() {
   });
 }
 
-// --- 2. Gemini API Integration ---
-async function callGeminiInnovationCheck(drugName, domains, apiKey) {
+// --- 2. Custom Domain UI Management ---
+function appendCustomDomainPill(domain) {
+  const container = document.getElementById('domain-pills-container');
+  const existing = Array.from(container.querySelectorAll('input')).find((i) => i.value === domain);
+  if (existing) {
+    existing.checked = true;
+    return;
+  }
+
+  const label = document.createElement('label');
+  label.className = 'pill-checkbox removable';
+
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.value = domain;
+  input.checked = true;
+
+  const span = document.createElement('span');
+  span.textContent = domain + ' ';
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'pill-remove-btn';
+  removeBtn.textContent = '✕';
+  removeBtn.title = 'ลบตัวเลือกนี้ออกจากระบบ';
+  removeBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await dbDeleteCustomDomain(domain);
+    label.remove();
+  });
+
+  span.appendChild(removeBtn);
+  label.appendChild(input);
+  label.appendChild(span);
+  container.appendChild(label);
+}
+
+async function loadSavedCustomDomains() {
+  const domains = await dbGetCustomDomains();
+  domains.forEach((d) => {
+    appendCustomDomainPill(d);
+  });
+}
+
+// --- 3. Gemini API Integration (2-Step Dynamic Search) ---
+
+// Step 1: ดึงขนาดความแรงและรูปแบบยาจากฐานข้อมูลราคา/DMSIC
+async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+  const promptText = `
+คุณเป็นผู้เชี่ยวชาญด้านเภสัชวิทยาและระบบฐานข้อมูลราคากลางยาภาครัฐ (DMSIC / อย. / บัญชียาหลักแห่งชาติ)
+กรุณาระบุขนาดความแรงและรูปแบบเภสัชภัณฑ์ (Dosage forms & Strengths) ทั้งหมดที่มีการจัดซื้อหรือใช้งานของยาชื่อ: "${drugName}"
+โดยเฉพาะที่ปรากฏในฐานข้อมูลราคาจัดซื้อยาภาครัฐของไทย หรือตาม URL นี้: "${priceUrl || 'dmsic.moph.go.th'}"
+
+ส่งผลลัพธ์กลับมาเป็น JSON ล้วนๆ ในรูปแบบ:
+\`\`\`json
+{
+  "strengths": [
+    "500 mg powder for injection (vial)",
+    "1 g powder for injection (vial)"
+  ]
+}
+\`\`\`
+ข้อกำหนด:
+- ส่งเฉพาะรายการความแรงและรูปแบบที่เป็นมาตรฐานจริง
+- กระชับ ชัดเจน เป็นภาษาไทยหรืออังกฤษมาตรฐาน
+`;
+
+  const requestBody = {
+    contents: [{ parts: [{ text: promptText }] }],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: 'application/json'
+    }
+  };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini API Error (${response.status}): ${errText}`);
+  }
+
+  const responseData = await response.json();
+  const rawText = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!rawText) throw new Error('ไม่พบข้อมูลขนาดความแรง');
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(rawText.trim());
+  } catch (e) {
+    const match = rawText.match(/\{[\s\S]*\}/);
+    if (match) parsed = JSON.parse(match[0]);
+  }
+
+  return parsed && Array.isArray(parsed.strengths) ? parsed.strengths : [];
+}
+
+// Step 2: วิเคราะห์นวัตกรรมและคำนวณราคาตามขนาดความแรงที่เจาะจง
+async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const targetDomainString = domains.join(', ');
+  const strengthInstruction = strength
+    ? `ขนาดความแรงและรูปแบบที่เจาะจงตรวจสอบ: "${strength}"`
+    : `ขนาดความแรง: ประเมินภาพรวมทุกขนาดความแรง`;
+
   const promptText = `
-คุณเป็นผู้เชี่ยวชาญด้านเภสัชวิทยาและนวัตกรรมยาระดับสากล
+คุณเป็นผู้เชี่ยวชาญด้านเภสัชวิทยา เศรษฐศาสตร์สาธารณสุข และนวัตกรรมยาระดับสากล
 กรุณาวิเคราะห์นวัตกรรมของยาชื่อ: "${drugName}"
+${strengthInstruction}
 โดยเน้นตรวจสอบข้อมูลที่ปรากฏหรือเกี่ยวข้องกับเว็บไซต์/โดเมนต่อไปนี้: [${targetDomainString}]
 
-ให้ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ Markdown code block ดังนี้:
+นอกจากนี้ ให้ประเมินข้อมูลราคาอ้างอิง ค่าใช้จ่าย หรือราคากลาง โดยเน้นอ้างอิงจากฐานข้อมูลราคาภาครัฐไทย เช่น DMSIC (https://dmsic.moph.go.th/index/drugsearch/1), บัญชียาหลักแห่งชาติ, สปสช. หรือกรมบัญชีกลาง สำหรับขนาดความแรงที่ระบุนี้โดยเฉพาะ
+(หากไม่สามารถเข้าถึง URL ได้ ให้ใช้ราคากลางอ้างอิงล่าสุดของประเทศไทยที่บันทึกไว้ในระบบ DMSIC/กรมบัญชีกลางมาแสดง พร้อมระบุที่มา)
+
+ให้ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ:
 \`\`\`json
 {
   "drugName": "${drugName}",
+  "selectedStrength": "${strength || 'ทุกขนาดความแรง/ภาพรวม'}",
   "classification": "หมวดหมู่หรือกลุ่มทางเภสัชวิทยา",
   "innovationScore": 9,
   "summary": "สรุปความเป็นนวัตกรรมของยานี้แบบกระชับ เข้าใจง่าย 3-4 ประโยค",
@@ -155,7 +289,14 @@ async function callGeminiInnovationCheck(drugName, domains, apiKey) {
       "domain": "ชื่อโดเมน",
       "findings": "ข้อค้นพบสำคัญจากหรือเกี่ยวกับโดเมนนี้"
     }
-  ]
+  ],
+  "pricing": {
+    "hasPriceInfo": true,
+    "strength": "${strength || 'ภาพรวม'}",
+    "estimatedPrice": "เช่น ~120 - 180 บาท / vial (ราคากลางภาครัฐ)",
+    "priceSource": "DMSIC กระทรวงสาธารณสุข / ราคากลางยา สปสช.",
+    "notes": "รายละเอียดการเบิกจ่ายตามสิทธิ สปสช./กรมบัญชีกลาง หรือข้อกำหนดการจัดซื้อ"
+  }
 }
 \`\`\`
 คำตอบต้องเป็นภาษาไทยที่กระชับและถูกต้องตามหลักวิชาการ
@@ -168,7 +309,8 @@ async function callGeminiInnovationCheck(drugName, domains, apiKey) {
       }
     ],
     generationConfig: {
-      temperature: 0.2
+      temperature: 0.2,
+      responseMimeType: 'application/json'
     }
   };
 
@@ -191,18 +333,22 @@ async function callGeminiInnovationCheck(drugName, domains, apiKey) {
   }
 
   let parsedData = null;
-  const jsonMatch = rawText.match(/```json([\s\S]*?)```/) || rawText.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    const jsonStr = jsonMatch[1] ? jsonMatch[1].trim() : jsonMatch[0].trim();
-    parsedData = JSON.parse(jsonStr);
-  } else {
+  try {
     parsedData = JSON.parse(rawText.trim());
+  } catch (e) {
+    const jsonMatch = rawText.match(/```json([\s\S]*?)```/) || rawText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const jsonStr = jsonMatch[1] ? jsonMatch[1].trim() : jsonMatch[0].trim();
+      parsedData = JSON.parse(jsonStr);
+    } else {
+      throw new Error('โครงสร้างข้อมูล JSON ไม่ถูกต้อง');
+    }
   }
 
   return parsedData;
 }
 
-// --- 3. UI Controller & View Switching ---
+// --- 4. UI Controller & View Switching ---
 function initNavigation() {
   const navItems = document.querySelectorAll('.nav-item');
   const views = document.querySelectorAll('.tab-view');
@@ -269,6 +415,13 @@ function renderResult(data) {
     });
   }
 
+  // แสดงผล Card ราคาเสมอ
+  const pData = data.pricing || {};
+  document.getElementById('result-price-strength').textContent = `ขนาด/รูปแบบ: ${escapeHtml(pData.strength || data.selectedStrength || 'ภาพรวม')}`;
+  document.getElementById('result-price-val').textContent = pData.estimatedPrice || 'ประมาณการตามราคากลางภาครัฐ';
+  document.getElementById('result-price-src').textContent = pData.priceSource ? `ที่มา: ${pData.priceSource}` : 'DMSIC / ราคากลางยาภาครัฐ';
+  document.getElementById('result-price-notes').textContent = pData.notes || 'อ้างอิงจากฐานข้อมูลราคากลางการจัดซื้อยา';
+
   document.getElementById('result-container').style.display = 'flex';
   document.getElementById('result-container').scrollIntoView({ behavior: 'smooth' });
 }
@@ -298,9 +451,11 @@ async function loadHistoryView() {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
       });
 
+      const strengthTag = rep.selectedStrength ? ` [${rep.selectedStrength}]` : '';
+
       itemEl.innerHTML = `
         <div>
-          <div class="history-name">${escapeHtml(rep.drugName)}</div>
+          <div class="history-name">${escapeHtml(rep.drugName)}${escapeHtml(strengthTag)}</div>
           <div class="history-meta">${escapeHtml(rep.classification || '')} • ${dateStr}</div>
         </div>
         <div class="history-actions">
@@ -338,13 +493,14 @@ async function loadHistoryView() {
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>'"]/g, 
-    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+    (tag) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
   );
 }
 
-// --- 4. Event Listeners & Startup ---
+// --- 5. Event Listeners & Startup ---
 document.addEventListener('DOMContentLoaded', async () => {
   await openDatabase();
+  await loadSavedCustomDomains();
   initNavigation();
 
   // Register Service Worker
@@ -377,6 +533,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert('บันทึก API Key ลงใน IndexedDB เรียบร้อยแล้ว');
   });
 
+  // Save Custom Domain as Persistent Pill Option
+  document.getElementById('btn-save-domain').addEventListener('click', async () => {
+    const input = document.getElementById('custom-domain-input');
+    let raw = input.value.trim();
+    if (!raw) {
+      alert('กรุณาระบุ URL หรือโดเมนที่ต้องการบันทึก');
+      return;
+    }
+
+    let domain = raw;
+    try {
+      if (domain.startsWith('http://') || domain.startsWith('https://')) {
+        const urlObj = new URL(domain);
+        domain = urlObj.hostname;
+      }
+    } catch (e) {
+      // ใช้ค่าตามที่กรอกหากไม่เข้าข่ายรูปแบบ URL มาตรฐาน
+    }
+
+    await dbSaveCustomDomain(domain);
+    appendCustomDomainPill(domain);
+    input.value = '';
+  });
+
   // Clear Search Input
   const drugInput = document.getElementById('drug-name-input');
   const clearBtn = document.getElementById('btn-clear-search');
@@ -389,7 +569,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     drugInput.focus();
   });
 
-  // Analyze Button
+  // Step 1: ปุ่มดึงขนาดความแรง (Fetch Strengths)
+  document.getElementById('btn-fetch-strengths').addEventListener('click', async () => {
+    const drugName = drugInput.value.trim();
+    if (!drugName) {
+      alert('กรุณากรอกชื่อยาก่อนเพื่อดึงขนาดความแรง');
+      return;
+    }
+
+    const apiKey = await dbGetSetting('gemini_api_key');
+    if (!apiKey) {
+      alert('กรุณาตั้งค่า Gemini API Key ที่แท็บ "ตั้งค่า" ก่อน');
+      document.querySelector('.nav-item[data-tab="view-settings"]').click();
+      return;
+    }
+
+    const priceUrl = document.getElementById('price-url-input').value.trim();
+    const btn = document.getElementById('btn-fetch-strengths');
+    const btnText = btn.querySelector('.btn-text');
+    const btnSpinner = btn.querySelector('.btn-spinner');
+    const select = document.getElementById('drug-strength-select');
+
+    btn.disabled = true;
+    btnText.textContent = 'กำลังดึงขนาดความแรงจากฐานข้อมูล...';
+    btnSpinner.style.display = 'block';
+
+    try {
+      const strengths = await callGeminiFetchStrengths(drugName, priceUrl, apiKey);
+      select.innerHTML = '<option value="">-- ภาพรวมทุกขนาดความแรง --</option>';
+
+      if (strengths.length > 0) {
+        strengths.forEach((st) => {
+          const opt = document.createElement('option');
+          opt.value = st;
+          opt.textContent = st;
+          select.appendChild(opt);
+        });
+        select.selectedIndex = 1; // เลือกตัวแรกเป็นค่าเริ่มต้นให้อัตโนมัติ
+      } else {
+        const opt = document.createElement('option');
+        opt.value = 'มาตรฐาน';
+        opt.textContent = 'ขนาดมาตรฐานทั่วไป';
+        select.appendChild(opt);
+      }
+    } catch (error) {
+      alert(`ดึงขนาดความแรงไม่สำเร็จ: ${error.message}`);
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = '🔍 ดึงขนาดความแรงจากฐานข้อมูลราคา (Step 1)';
+      btnSpinner.style.display = 'none';
+    }
+  });
+
+  // Step 2: Analyze Button
   document.getElementById('btn-analyze').addEventListener('click', async () => {
     const drugName = drugInput.value.trim();
     if (!drugName) {
@@ -409,15 +641,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectedDomains.push(cb.value);
     });
 
-    const customDomain = document.getElementById('custom-domain-input').value.trim();
-    if (customDomain) {
-      selectedDomains.push(customDomain);
+    const customDomainInputVal = document.getElementById('custom-domain-input').value.trim();
+    if (customDomainInputVal && !selectedDomains.includes(customDomainInputVal)) {
+      selectedDomains.push(customDomainInputVal);
     }
 
     if (selectedDomains.length === 0) {
       alert('กรุณาเลือกหรือระบุโดเมนเป้าหมายอย่างน้อย 1 แห่ง');
       return;
     }
+
+    const priceUrl = document.getElementById('price-url-input').value.trim();
+    const selectedStrength = document.getElementById('drug-strength-select').value;
 
     const btn = document.getElementById('btn-analyze');
     const btnText = btn.querySelector('.btn-text');
@@ -428,13 +663,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnSpinner.style.display = 'block';
 
     try {
-      const analysisData = await callGeminiInnovationCheck(drugName, selectedDomains, apiKey);
+      const analysisData = await callGeminiInnovationCheck(drugName, selectedStrength, selectedDomains, priceUrl, apiKey);
       renderResult(analysisData);
     } catch (error) {
       alert(`การวิเคราะห์ล้มเหลว: ${error.message}`);
     } finally {
       btn.disabled = false;
-      btnText.textContent = 'ตรวจสอบนวัตกรรมยา';
+      btnText.textContent = 'ตรวจสอบนวัตกรรมและราคาอ้างอิง (Step 2)';
       btnSpinner.style.display = 'none';
     }
   });

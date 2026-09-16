@@ -28,12 +28,29 @@
       <!-- Search View -->
       <section id="view-search" class="tab-view active">
         <div class="search-card">
-          <label for="drug-name-input" class="form-label">ชื่อยาหรือสารสำคัญ (Generic / Trade Name)</label>
+          <!-- Step 1: ชื่อยา & ปุ่มดึงความแรง -->
+          <label for="drug-name-input" class="form-label">1. ชื่อยาหรือสารสำคัญ (Generic / Trade Name)</label>
           <div class="input-wrapper">
-            <input type="text" id="drug-name-input" placeholder="เช่น Semaglutide, Lecanemab..." autocomplete="off">
+            <input type="text" id="drug-name-input" placeholder="เช่น Semaglutide, Meropenem..." autocomplete="off">
             <button id="btn-clear-search" class="clear-btn" style="display: none;">✕</button>
           </div>
 
+          <div class="mt-2">
+            <button type="button" id="btn-fetch-strengths" class="secondary-btn flex-btn">
+              <span class="btn-text">🔍 ดึงขนาดความแรงจากฐานข้อมูลราคา (Step 1)</span>
+              <div class="btn-spinner" style="display: none;"></div>
+            </button>
+          </div>
+
+          <!-- Step 2: เลือกขนาดความแรง -->
+          <label for="drug-strength-select" class="form-label">2. ขนาดความแรงและรูปแบบยา (Dosage Form & Strength)</label>
+          <div class="select-wrapper">
+            <select id="drug-strength-select">
+              <option value="">-- กรุณากดดึงขนาดความแรง หรือระบุภาพรวม --</option>
+            </select>
+          </div>
+
+          <!-- โดเมนเป้าหมาย -->
           <label class="form-label">โดเมนเป้าหมายที่ต้องการให้ AI ค้นหา</label>
           <div class="domain-pills" id="domain-pills-container">
             <label class="pill-checkbox">
@@ -62,13 +79,14 @@
             <p class="settings-hint">โดเมนที่บันทึกจะถูกเก็บลงใน IndexedDB เพื่อเป็นตัวเลือกใช้งานถาวร</p>
           </div>
 
+          <!-- แหล่งอ้างอิงราคา -->
           <label for="price-url-input" class="form-label">ตรวจสอบราคาอ้างอิง (Price Reference URL / แหล่งข้อมูลราคา)</label>
           <div class="input-wrapper mb-3">
-            <input type="text" id="price-url-input" placeholder="ระบุ URL หรือแหล่งราคา เช่น goodrx.com, ราคากลางยา (เว้นว่างได้)">
+            <input type="text" id="price-url-input" value="https://dmsic.moph.go.th/index/drugsearch/1" placeholder="ระบุ URL หรือแหล่งราคา เช่น goodrx.com, DMSIC">
           </div>
 
           <button id="btn-analyze" class="primary-btn">
-            <span class="btn-text">ตรวจสอบนวัตกรรมยา</span>
+            <span class="btn-text">ตรวจสอบนวัตกรรมและราคาอ้างอิง (Step 2)</span>
             <div class="btn-spinner" style="display: none;"></div>
           </button>
         </div>
@@ -110,9 +128,11 @@
             <div id="result-sources" class="sources-list"></div>
           </div>
 
-          <div id="result-pricing-card" class="card result-card" style="display: none;">
+          <!-- กล่องแสดงราคาอ้างอิง -->
+          <div id="result-pricing-card" class="card result-card">
             <h3 class="card-heading">💵 ข้อมูลราคาอ้างอิงและประมาณการค่าใช้จ่าย (Reference Price)</h3>
-            <div class="pricing-summary-box">
+            <div class="pricing-strength-badge" id="result-price-strength">-</div>
+            <div class="pricing-summary-box mt-2">
               <div class="pricing-main-value" id="result-price-val">-</div>
               <div class="pricing-source-badge" id="result-price-src">-</div>
             </div>

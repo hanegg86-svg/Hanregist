@@ -168,6 +168,33 @@ input[type="text"]:focus, input[type="password"]:focus {
   border-color: var(--primary);
 }
 
+.select-wrapper {
+  position: relative;
+}
+
+select {
+  width: 100%;
+  padding: 12px 14px;
+  background: #0f172a;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  cursor: pointer;
+}
+
+select:focus {
+  border-color: var(--primary);
+}
+
 .clear-btn {
   position: absolute;
   right: 12px;
@@ -275,6 +302,13 @@ input[type="text"]:focus, input[type="password"]:focus {
 
 .mt-2 {
   margin-top: 8px;
+}
+
+.flex-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* Buttons */
@@ -452,6 +486,16 @@ input[type="text"]:focus, input[type="password"]:focus {
 }
 
 /* Pricing Result Styling */
+.pricing-strength-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  background: rgba(14, 165, 233, 0.2);
+  color: var(--primary);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+}
+
 .pricing-summary-box {
   display: flex;
   align-items: baseline;
@@ -462,7 +506,6 @@ input[type="text"]:focus, input[type="password"]:focus {
   padding: 12px 14px;
   border-radius: var(--radius-sm);
   border-left: 3px solid var(--accent);
-  margin-bottom: 8px;
 }
 
 .pricing-main-value {
