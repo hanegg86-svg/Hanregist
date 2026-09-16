@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PharmaNova">
+  <title>PharmaNova - Drug Innovation Checker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="logo-mark">Rx</div>
+        <div>
+          <h1 class="app-title">PharmaNova</h1>
+          <p class="app-subtitle">Drug Innovation Intelligence</p>
+        </div>
+      </div>
+      <button id="btn-quick-settings" class="icon-btn" aria-label="Settings">⚙️</button>
+    </header>
+
+    <main class="app-content">
+      <!-- Search View -->
+      <section id="view-search" class="tab-view active">
+        <div class="search-card">
+          <label for="drug-name-input" class="form-label">ชื่อยาหรือสารสำคัญ (Generic / Trade Name)</label>
+          <div class="input-wrapper">
+            <input type="text" id="drug-name-input" placeholder="เช่น Semaglutide, Lecanemab..." autocomplete="off">
+            <button id="btn-clear-search" class="clear-btn" style="display: none;">✕</button>
+          </div>
+
+          <label class="form-label">โดเมนเป้าหมายที่ต้องการให้ AI ค้นหา</label>
+          <div class="domain-pills">
+            <label class="pill-checkbox">
+              <input type="checkbox" value="fda.gov" checked>
+              <span>FDA.gov</span>
+            </label>
+            <label class="pill-checkbox">
+              <input type="checkbox" value="clinicaltrials.gov" checked>
+              <span>ClinicalTrials</span>
+            </label>
+            <label class="pill-checkbox">
+              <input type="checkbox" value="pubmed.ncbi.nlm.nih.gov" checked>
+              <span>PubMed</span>
+            </label>
+            <label class="pill-checkbox">
+              <input type="checkbox" value="ema.europa.eu">
+              <span>EMA</span>
+            </label>
+          </div>
+
+          <div class="custom-domain-box">
+            <input type="text" id="custom-domain-input" placeholder="ระบุโดเมนเพิ่มเติม เช่น who.int">
+          </div>
+
+          <button id="btn-analyze" class="primary-btn">
+            <span class="btn-text">ตรวจสอบนวัตกรรมยา</span>
+            <div class="btn-spinner" style="display: none;"></div>
+          </button>
+        </div>
+
+        <div id="result-container" class="result-container" style="display: none;">
+          <div class="result-header-bar">
+            <div>
+              <span id="result-tag" class="badge">นวัตกรรม</span>
+              <h2 id="result-drug-name" class="result-title">-</h2>
+            </div>
+            <button id="btn-save-report" class="action-icon-btn" title="บันทึกลงฐานข้อมูล">💾</button>
+          </div>
+
+          <div class="score-card">
+            <div class="score-number" id="result-score">0</div>
+            <div class="score-info">
+              <div class="score-title">Innovation Score</div>
+              <div class="score-desc" id="result-class">-</div>
+            </div>
+          </div>
+
+          <div class="card result-card">
+            <h3 class="card-heading">📌 สรุปภาพรวมนวัตกรรม</h3>
+            <p id="result-summary" class="card-text">-</p>
+          </div>
+
+          <div class="card result-card">
+            <h3 class="card-heading">🔬 กลไกและเทคโนโลยีใหม่ (Novel Mechanisms)</h3>
+            <ul id="result-mechanisms" class="feature-list"></ul>
+          </div>
+
+          <div class="card result-card">
+            <h3 class="card-heading">📊 สถานะการทดลองทางคลินิก (Clinical Phase)</h3>
+            <p id="result-clinical" class="card-text">-</p>
+          </div>
+
+          <div class="card result-card">
+            <h3 class="card-heading">🌐 ข้อมูลที่ตรวจพบจากโดเมนเป้าหมาย</h3>
+            <div id="result-sources" class="sources-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- History View (IndexedDB) -->
+      <section id="view-history" class="tab-view">
+        <div class="history-controls">
+          <h2 class="view-title">ประวัติการตรวจสอบ (IndexedDB)</h2>
+          <div class="filter-group">
+            <button id="filter-all" class="chip active">ทั้งหมด</button>
+            <button id="filter-fav" class="chip">รายการโปรด ⭐</button>
+          </div>
+        </div>
+        <div id="history-list" class="history-list"></div>
+      </section>
+
+      <!-- Settings View -->
+      <section id="view-settings" class="tab-view">
+        <h2 class="view-title">ตั้งค่าระบบ</h2>
+        <div class="card settings-card">
+          <label for="api-key-input" class="form-label">Gemini API Key</label>
+          <div class="api-key-wrapper">
+            <input type="password" id="api-key-input" placeholder="AIzaSy...">
+            <button id="btn-toggle-key" class="toggle-btn">👁️</button>
+          </div>
+          <p class="settings-hint">ระบบจะบันทึก Key ลงใน IndexedDB บนเครื่องของคุณเท่านั้น</p>
+          <button id="btn-save-key" class="secondary-btn">บันทึก Key</button>
+        </div>
+
+        <div class="card settings-card danger-zone">
+          <h3 class="card-heading">การจัดการข้อมูลท้องถิ่น</h3>
+          <p class="settings-hint">ล้างประวัติการค้นหาทั้งหมดที่เก็บอยู่ใน IndexedDB</p>
+          <button id="btn-clear-db" class="danger-btn">ล้างประวัติการค้นหาทั้งหมด</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-tab="view-search">
+        <span class="nav-icon">🔍</span>
+        <span class="nav-label">ค้นหา</span>
+      </button>
+      <button class="nav-item" data-tab="view-history">
+        <span class="nav-icon">📚</span>
+        <span class="nav-label">ประวัติ</span>
+      </button>
+      <button class="nav-item" data-tab="view-settings">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">ตั้งค่า</span>
+      </button>
+    </nav>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
