@@ -165,7 +165,7 @@ function renderPresetPill(preset) {
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.value = preset.url;
-  input.checked = true; // เปิดใช้งานทันทีหลังสร้าง
+  input.checked = true;
 
   const span = document.createElement('span');
   span.textContent = `🔖 ${preset.name} `;
@@ -273,9 +273,9 @@ async function copyAndOpenFda() {
   window.open(targetUrl, '_blank');
 }
 
-// --- 4. Gemini API Integration (Innovation + FDA Registrations + Procurement Price Table) ---
+// --- 4. Gemini API Integration ---
 
-// Step 1: ดึงขนาดความแรงและรูปแบบยาจากฐานข้อมูลราคา/DMSIC
+// Step 1: ดึงขนาดความแรงและรูปแบบยาจากฐานข้อมูล
 async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -293,9 +293,6 @@ async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
   ]
 }
 \`\`\`
-ข้อกำหนด:
-- ส่งเฉพาะรายการความแรงและรูปแบบที่มีการจัดซื้อจริงในไทย
-- กระชับ ชัดเจน
 `;
 
   const requestBody = {
@@ -333,9 +330,23 @@ async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
   return parsed && Array.isArray(parsed.strengths) ? parsed.strengths : [];
 }
 
-// Step 2: วิเคราะห์นวัตกรรม + ทะเบียนตำรับยา อย. ไทย + ตารางราคาอ้างอิง DMSIC
+// Step 2: วิเคราะห์นวัตกรรม + สกัดตาราง อย. และ DMSIC
 async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+  // ดึง HTML ตารางจริงจากเว็บ อย. ผ่าน CORS Proxy
+  let rawFdaHtml = "";
+  try {
+    const fdaTargetUrl = "https://pertento.fda.moph.go.th/FDA_SEARCH_DRUG/SEARCH_DRUG/FRM_SEARCH_DRUG.aspx";
+    const proxyUrl = "https://api.allorigins.win/get?url=" + encodeURIComponent(fdaTargetUrl);
+    const fdaRes = await fetch(proxyUrl);
+    if (fdaRes.ok) {
+      const fdaData = await fdaRes.json();
+      rawFdaHtml = fdaData.contents || "";
+    }
+  } catch (e) {
+    console.warn("ไม่สามารถดึง HTML ตรงจากเว็บ อย. ได้ จะใช้ฐานข้อมูลของ AI แทน:", e);
+  }
 
   const targetDomainString = domains.join(', ');
   const strengthInstruction = strength
@@ -348,88 +359,66 @@ async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, 
 ${strengthInstruction}
 โดยเน้นตรวจสอบข้อมูลที่ปรากฏหรือเกี่ยวข้องกับเว็บไซต์/โดเมนต่อไปนี้: [${targetDomainString}]
 
-นอกจากนี้ กรุณาดำเนินการประเมิน 2 ส่วนสำคัญของประเทศไทย:
+ข้อมูล HTML ตารางจากเว็บ อย. (ถ้ามี):
+${rawFdaHtml ? rawFdaHtml.substring(0, 15000) : "ไม่พบ HTML ตาราง ให้ใช้ข้อมูลทะเบียนที่อนุมัติจริงในไทย"}
 
-1. ข้อมูล "ระบบค้นหาข้อมูลผลิตภัณฑ์ยา สำนักงานคณะกรรมการอาหารและยา (อย. pertento.fda.moph.go.th)"
-เมื่อค้นหาด้วยชื่อสารสำคัญ: "${drugName}"
-กรุณาจำลองรายการทะเบียนตำรับยาที่ได้รับอนุมัติในประเทศไทย ทั้งหมดที่มีข้อมูล (เช่น ยาต้นแบบ ยาสามัญ และรูปแบบต่างๆ)
-โดยให้โครงสร้างตารางมี 5 คอลัมน์ตามหน้าเว็บ อย.:
-- no: ลำดับที่ (ตัวเลข)
-- regNo: เลขทะเบียนตำรับยา (เช่น "1C 103/54 (N)", "1C 15079/67 (NG)")
-- tradeNameTh: ชื่อทางการค้าภาษาไทย (ถ้าไม่มีให้ระบุ "-")
-- tradeNameEn: ชื่อทางการค้าภาษาอังกฤษ (เช่น "RENVELA TABLETS", "SEVELA F.C. TABLET 800 MG")
-- licensee: ชื่อผู้รับอนุญาต (เช่น "บริษัท ซาโนฟี่-อเวนตีส (ประเทศไทย) จำกัด", "บริษัท สยามเภสัช จำกัด")
+กรุณาสกัดหรือประเมินข้อมูล 2 ส่วนสำคัญ:
+1. ข้อมูลทะเบียนตำรับยา อย. ประเทศไทย สำหรับสารสำคัญ "${drugName}" (คอลัมน์: no, regNo, tradeNameTh, tradeNameEn, licensee)
+2. ข้อมูลราคาอ้างอิงจัดซื้อปกติจาก DMSIC สำหรับขนาดความแรง "${strength || 'มาตรฐาน'}" (คอลัมน์: packSize, company, minPrice, modePrice, medianPrice, avgPrice)
 
-2. ข้อมูล "ราคาอ้างอิงจัดซื้อปกติ (ยา) จากฐานข้อมูล DMSIC กระทรวงสาธารณสุข"
-สำหรับยานี้ในขนาดความแรง "${strength || 'มาตรฐาน'}" แจกแจงรายชื่อบริษัทผู้ยื่นเสนอราคาทุกรายที่มีประวัติจัดซื้อในโรงพยาบาลรัฐ โดยมีครบ 6 คอลัมน์ (packSize, company, minPrice, modePrice, medianPrice, avgPrice)
-พร้อมระบุ referenceDocument, dataPeriod, และ sourceConfidence
-
-ให้ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ:
+ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ:
 \`\`\`json
 {
   "drugName": "${drugName}",
   "selectedStrength": "${strength || 'ทุกขนาดความแรง/ภาพรวม'}",
   "classification": "หมวดหมู่หรือกลุ่มทางเภสัชวิทยา",
   "innovationScore": 9,
-  "summary": "สรุปความเป็นนวัตกรรมของยานี้แบบกระชับ เข้าใจง่าย 3-4 ประโยค",
+  "summary": "สรุปความเป็นนวัตกรรมของยานี้แบบกระชับ 3-4 ประโยค",
   "novelMechanisms": [
-    "กลไกการออกฤทธิ์ใหม่จุดที่ 1",
-    "เทคโนโลยีการผลิต หรือการนำส่งยาที่เป็นนวัตกรรม"
+    "กลไกการออกฤทธิ์ใหม่จุดที่ 1"
   ],
-  "clinicalStatus": "สถานะการทดลองหรือการอนุมัติ เช่น FDA Approved / Phase III",
+  "clinicalStatus": "สถานะการทดลองหรือการอนุมัติ",
   "targetDomainFindings": [
     {
       "domain": "ชื่อโดเมน",
-      "findings": "ข้อค้นพบสำคัญจากหรือเกี่ยวกับโดเมนนี้"
+      "findings": "ข้อค้นพบสำคัญ"
     }
   ],
   "fdaRegistrations": [
     {
       "no": 1,
-      "regNo": "1C 103/54 (N)",
-      "tradeNameTh": "-",
-      "tradeNameEn": "RENVELA(R) TABLETS",
-      "licensee": "บริษัท ซาโนฟี่-อเวนตีส (ประเทศไทย) จำกัด"
-    },
-    {
-      "no": 2,
-      "regNo": "1C 15079/67 (NG)",
-      "tradeNameTh": "-",
-      "tradeNameEn": "SEVELA F.C. TABLET 800 MG",
-      "licensee": "บริษัท สยามเภสัช จำกัด"
+      "regNo": "เลขทะเบียน",
+      "tradeNameTh": "ชื่อไทย",
+      "tradeNameEn": "ชื่ออังกฤษ",
+      "licensee": "ผู้รับอนุญาต"
     }
   ],
   "pricing": {
     "hasPriceInfo": true,
     "strength": "${strength || 'ภาพรวม'}",
     "estimatedPrice": "ประมาณการราคาอ้างอิง",
-    "priceSource": "DMSIC กระทรวงสาธารณสุข (ราคาอ้างอิงจัดซื้อปกติ)",
-    "referenceDocument": "ฐานข้อมูลราคาอ้างอิงจัดซื้อปกติ ศูนย์ข้อมูลข่าวสารด้านเวชภัณฑ์ กระทรวงสาธารณสุข (DMSIC) ร่วมกับประกาศคณะกรรมการพัฒนาระบบยาแห่งชาติ",
-    "dataPeriod": "ประวัติการจัดซื้อภาครัฐปีงบประมาณ 2564 - 2566",
-    "sourceConfidence": "ข้อมูลตรงตามประวัติการจัดซื้อในระบบ DMSIC",
-    "notes": "ข้อมูลราคาอ้างอิงตามประวัติการจัดซื้อภาครัฐในประเทศไทย แยกตามบริษัทผู้ยื่นเสนอราคา",
+    "priceSource": "DMSIC กระทรวงสาธารณสุข",
+    "referenceDocument": "ฐานข้อมูลราคาอ้างอิง DMSIC",
+    "dataPeriod": "ปีงบประมาณภาครัฐ",
+    "sourceConfidence": "ข้อมูลตรงตามประวัติจัดซื้อ",
+    "notes": "หมายเหตุราคา",
     "priceTable": [
       {
         "packSize": "1",
-        "company": "SUN PHARMACEUTICAL INDUSTRIES, INDIA",
-        "minPrice": "87.74",
-        "modePrice": "90.95",
-        "medianPrice": "90.95",
-        "avgPrice": "90.8481"
+        "company": "ชื่อบริษัท",
+        "minPrice": "0",
+        "modePrice": "0",
+        "medianPrice": "0",
+        "avgPrice": "0"
       }
     ]
   }
 }
 \`\`\`
-คำตอบต้องเป็นภาษาไทยที่กระชับและถูกต้องตามหลักวิชาการ
 `;
 
   const requestBody = {
-    contents: [
-      {
-        parts: [{ text: promptText }]
-      }
-    ],
+    contents: [{ parts: [{ text: promptText }] }],
     generationConfig: {
       temperature: 0.2,
       responseMimeType: 'application/json'
@@ -450,9 +439,7 @@ ${strengthInstruction}
   const responseData = await response.json();
   const rawText = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
 
-  if (!rawText) {
-    throw new Error('ไม่พบข้อมูลตอบกลับจากโมเดล AI');
-  }
+  if (!rawText) throw new Error('ไม่พบข้อมูลตอบกลับจากโมเดล AI');
 
   let parsedData = null;
   try {
@@ -561,14 +548,13 @@ function renderResult(data) {
     fdaTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 14px;">ไม่พบรายการขึ้นทะเบียนตำรับยาในประเทศไทยสำหรับสารสำคัญนี้</td></tr>`;
   }
 
-  // เรนเดอร์กล่องราคาและตารางรายชื่อบริษัท DMSIC (6 คอลัมน์)
+  // เรนเดอร์กล่องราคาและตาราง DMSIC
   const pData = data.pricing || {};
   document.getElementById('result-price-strength').textContent = `ขนาด/รูปแบบ: ${escapeHtml(pData.strength || data.selectedStrength || 'ภาพรวม')}`;
   document.getElementById('result-price-val').textContent = pData.estimatedPrice || 'ประมาณการตามราคากลางภาครัฐ';
   document.getElementById('result-price-src').textContent = pData.priceSource ? `ที่มา: ${pData.priceSource}` : 'DMSIC / ราคากลางยาภาครัฐ';
   document.getElementById('result-price-notes').textContent = pData.notes || 'อ้างอิงจากฐานข้อมูลราคากลางการจัดซื้อยา';
 
-  // แสดงรายละเอียดแหล่งอ้างอิงและรอบข้อมูล (Citations)
   const docText = pData.referenceDocument || 'ฐานข้อมูลราคาอ้างอิงจัดซื้อปกติ ศูนย์ข้อมูลข่าวสารด้านเวชภัณฑ์ กระทรวงสาธารณสุข (DMSIC)';
   const periodText = pData.dataPeriod || 'รอบข้อมูลปีงบประมาณภาครัฐ';
   const confidenceText = pData.sourceConfidence || 'เทียบเคียงฐานข้อมูลประวัติการจัดซื้อภาครัฐ';
@@ -678,26 +664,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSavedPresets();
   initNavigation();
 
-  // Register Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./service-worker.js').catch((err) => {
       console.warn('Service Worker registration failed:', err);
     });
   }
 
-  // Restore API Key
   const storedKey = await dbGetSetting('gemini_api_key');
   if (storedKey) {
     document.getElementById('api-key-input').value = storedKey;
   }
 
-  // API Key Visibility Toggle
   document.getElementById('btn-toggle-key').addEventListener('click', () => {
     const keyInput = document.getElementById('api-key-input');
     keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
   });
 
-  // Save API Key to IndexedDB
   document.getElementById('btn-save-key').addEventListener('click', async () => {
     const key = document.getElementById('api-key-input').value.trim();
     if (!key) {
@@ -708,15 +690,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert('บันทึก API Key ลงใน IndexedDB เรียบร้อยแล้ว');
   });
 
-  // Event listener สำหรับปุ่มคัดลอกชื่อยา & เปิดเว็บ DMSIC
   document.getElementById('btn-open-dmsic').addEventListener('click', copyAndOpenDmsic);
   document.getElementById('btn-open-dmsic-result').addEventListener('click', copyAndOpenDmsic);
-
-  // Event listener สำหรับปุ่มคัดลอกชื่อสารสำคัญ & เปิดเว็บ อย.
   document.getElementById('btn-open-fda').addEventListener('click', copyAndOpenFda);
   document.getElementById('btn-open-fda-result').addEventListener('click', copyAndOpenFda);
 
-  // บันทึกปุ่มด่วนพร้อมตั้งชื่อปุ่มเอง (Save Custom URL Preset)
   document.getElementById('btn-save-preset').addEventListener('click', async () => {
     const nameInput = document.getElementById('preset-name-input');
     const urlInput = document.getElementById('preset-url-input');
@@ -745,7 +723,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Clear Search Input
   const drugInput = document.getElementById('drug-name-input');
   const clearBtn = document.getElementById('btn-clear-search');
   drugInput.addEventListener('input', () => {
@@ -757,7 +734,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     drugInput.focus();
   });
 
-  // Step 1: ปุ่มดึงขนาดความแรง (Fetch Strengths)
+  // Step 1: ปุ่มดึงขนาดความแรง
   document.getElementById('btn-fetch-strengths').addEventListener('click', async () => {
     const drugName = drugInput.value.trim();
     if (!drugName) {
@@ -793,7 +770,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           opt.textContent = st;
           select.appendChild(opt);
         });
-        select.selectedIndex = 1; // เลือกตัวแรกเป็นค่าเริ่มต้นให้อัตโนมัติ
+        select.selectedIndex = 1;
       } else {
         const opt = document.createElement('option');
         opt.value = 'มาตรฐาน';
@@ -824,7 +801,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // รวบรวมโดเมนมาตรฐาน + โดเมนจากปุ่มด่วนที่ผู้ใช้ติ๊กเลือก
     const selectedDomains = [];
     document.querySelectorAll('#domain-pills-container input:checked').forEach((cb) => {
       selectedDomains.push(cb.value);
@@ -861,7 +837,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Save current report to IndexedDB
   document.getElementById('btn-save-report').addEventListener('click', async () => {
     if (!currentReport) return;
     try {
@@ -872,7 +847,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Clear All Database records
   document.getElementById('btn-clear-db').addEventListener('click', async () => {
     if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบประวัติการค้นหาทั้งหมดใน IndexedDB?')) {
       await dbClearAllReports();
@@ -881,7 +855,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // History Filter Chips
   document.getElementById('filter-all').addEventListener('click', function () {
     activeFilter = 'all';
     this.classList.add('active');
