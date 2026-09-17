@@ -330,7 +330,7 @@ async function callGeminiFetchStrengths(drugName, priceUrl, apiKey) {
   return parsed && Array.isArray(parsed.strengths) ? parsed.strengths : [];
 }
 
-// Step 2: วิเคราะห์นวัตกรรม + สกัดตาราง อย. และ DMSIC
+// Step 2: วิเคราะห์นวัตกรรม + สกัดตาราง อย. แบบเต็มรายการ และ DMSIC
 async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -359,12 +359,17 @@ async function callGeminiInnovationCheck(drugName, strength, domains, priceUrl, 
 ${strengthInstruction}
 โดยเน้นตรวจสอบข้อมูลที่ปรากฏหรือเกี่ยวข้องกับเว็บไซต์/โดเมนต่อไปนี้: [${targetDomainString}]
 
-ข้อมูล HTML ตารางจากเว็บ อย. (ถ้ามี):
-${rawFdaHtml ? rawFdaHtml.substring(0, 15000) : "ไม่พบ HTML ตาราง ให้ใช้ข้อมูลทะเบียนที่อนุมัติจริงในไทย"}
+ข้อมูล HTML ตารางจากเว็บ อย. (อ่านแบบละเอียด):
+${rawFdaHtml ? rawFdaHtml.substring(0, 35000) : "ไม่พบ HTML ตาราง ให้ใช้ข้อมูลทะเบียนที่อนุมัติจริงในไทย"}
 
-กรุณาสกัดหรือประเมินข้อมูล 2 ส่วนสำคัญ:
-1. ข้อมูลทะเบียนตำรับยา อย. ประเทศไทย สำหรับสารสำคัญ "${drugName}" (คอลัมน์: no, regNo, tradeNameTh, tradeNameEn, licensee)
-2. ข้อมูลราคาอ้างอิงจัดซื้อปกติจาก DMSIC สำหรับขนาดความแรง "${strength || 'มาตรฐาน'}" (คอลัมน์: packSize, company, minPrice, modePrice, medianPrice, avgPrice)
+ข้อกำหนดสำคัญในการสกัดข้อมูล:
+1. สำหรับข้อมูลทะเบียนตำรับยา อย. ประเทศไทย สารสำคัญ "${drugName}":
+   - สกัดและแสดงรายการทะเบียนยาทั้งหมดที่พบใน HTML หรือในระบบให้ครบถ้วนที่สุด ห้ามย่อรายการ ห้ามตัดเหลือแค่ 5 รายการ
+   - หากในตารางมีหลายรายการ ให้ใส่มาให้ครบทุกแถวเท่าที่พบ
+   - โครงสร้างคอลัมน์: no, regNo, tradeNameTh, tradeNameEn, licensee
+
+2. ข้อมูลราคาอ้างอิงจัดซื้อปกติจาก DMSIC สำหรับขนาดความแรง "${strength || 'มาตรฐาน'}":
+   - คอลัมน์: packSize, company, minPrice, modePrice, medianPrice, avgPrice
 
 ส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ล้วนๆ ในรูปแบบ:
 \`\`\`json
@@ -420,7 +425,7 @@ ${rawFdaHtml ? rawFdaHtml.substring(0, 15000) : "ไม่พบ HTML ตาร�
   const requestBody = {
     contents: [{ parts: [{ text: promptText }] }],
     generationConfig: {
-      temperature: 0.2,
+      temperature: 0.1,
       responseMimeType: 'application/json'
     }
   };
